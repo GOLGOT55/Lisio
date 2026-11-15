@@ -1,0 +1,15 @@
+{
+  "name": "lisio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Livres PDF et livres audio synchronisés mot à mot, hébergés sur ton PC.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "db": "wrangler d1 execute lisio --local --persist-to data --file schema.sql",
+    "dev": "wrangler dev --ip 0.0.0.0 --port 8787 --persist-to data"
+  },
+  "devDependencies": {
+    "wrangler": "^4.162.0"
+  }
+}

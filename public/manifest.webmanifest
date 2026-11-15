@@ -1,0 +1,14 @@
+{
+  "name": "Lisio",
+  "short_name": "Lisio",
+  "description": "Lis et écoute tes livres, le mot prononcé suit le texte.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4efe6",
+  "theme_color": "#2f5d50",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,3 @@
+# Bibliothèques CUDA pour les cartes NVIDIA (installées automatiquement si nvidia-smi est trouvé)
+nvidia-cublas-cu12
+nvidia-cudnn-cu12==9.*

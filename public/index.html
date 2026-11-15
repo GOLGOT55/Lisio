@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="fr" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Lisio</title>
+  <meta name="description" content="Lis et écoute tes livres, le mot prononcé suit le texte.">
+  <meta name="theme-color" content="#f4efe6">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <!-- Connexion -->
+  <section id="auth" class="view" hidden>
+    <div class="auth-card">
+      <div class="brand"><img src="/icon.svg" alt="" width="44" height="44"><span>Lisio</span></div>
+      <p class="auth-sub">Lis et écoute en même temps. Le mot prononcé suit le texte.</p>
+      <h2 class="auth-h" id="authH">Connexion</h2>
+      <form id="authForm" novalidate>
+        <label data-m="signup">Nom ou pseudo<input name="name" autocomplete="nickname" maxlength="40" placeholder="Comment veux-tu qu'on t'appelle ?"></label>
+        <label data-m="login signup forgot reset">E-mail<input type="email" name="email" autocomplete="email"></label>
+        <label data-m="reset">Code reçu par e-mail<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••" class="code-in"></label>
+        <label data-m="login signup reset">Mot de passe
+          <span class="pw"><input type="password" name="password" autocomplete="current-password" minlength="6"><button type="button" class="eye" aria-label="Afficher le mot de passe"></button></span></label>
+        <label data-m="signup reset">Confirmer le mot de passe
+          <span class="pw"><input type="password" name="password2" autocomplete="new-password" minlength="6"><button type="button" class="eye" aria-label="Afficher le mot de passe"></button></span></label>
+        <div class="auth-opts" data-m="login signup">
+          <label class="check"><input type="checkbox" name="remember" checked><span>Se souvenir de moi</span></label>
+        </div>
+        <p class="auth-info" id="authInfo" data-m="forgot reset"></p>
+        <p id="authErr" class="err" role="alert"></p>
+        <button class="btn primary" type="submit" id="authSubmit">Se connecter</button>
+      </form>
+      <button class="link" id="authSwitch" type="button">Pas encore de compte ? Créer un compte</button>
+    </div>
+  </section>
+
+  <!-- Bibliothèque -->
+  <section id="library" class="view" hidden>
+    <header class="lib-head">
+      <div class="brand"><img src="/icon.svg" alt="" width="34" height="34"><span>Lisio</span></div>
+      <div class="lib-actions">
+        <button class="btn accent" data-act="addBook">+ Ajouter un livre</button>
+        <button class="icon-btn" data-act="settings" aria-label="Paramètres"></button>
+      </div>
+    </header>
+    <div class="lib-body">
+      <p class="lib-hello" id="hello"></p>
+      <div id="resume"></div>
+      <div class="lib-row">
+        <h1 class="lib-title">Ma bibliothèque</h1>
+        <span class="lib-count" id="libCount"></span>
+      </div>
+      <div class="shelf" id="shelf"></div>
+    </div>
+  </section>
+
+  <!-- Ajouter un livre -->
+  <section id="add" class="view" hidden>
+    <header class="lib-head">
+      <button class="btn ghost" data-act="toLibrary">← Bibliothèque</button>
+      <div class="brand"><img src="/icon.svg" alt="" width="30" height="30"><span>Lisio</span></div>
+    </header>
+    <div class="add-body">
+      <h1 class="lib-title">Ajouter un livre</h1>
+      <p class="muted add-intro">Dépose le PDF et les fichiers audio dans l'ordre. Lisio écoute l'audio, le cale mot à mot sur le PDF, puis le met dans ta bibliothèque.</p>
+
+      <form id="codeForm" class="code-form">
+        <label for="shareCode">J'ai un code de partage</label>
+        <div class="code-row"><input id="shareCode" name="code" placeholder="ABCD-EFGH-JKLM" maxlength="20" autocomplete="off" required><button class="btn accent">Ajouter</button></div>
+        <p class="err" id="codeErr" role="alert"></p>
+      </form>
+
+      <div class="sources">
+        <div>
+          <strong>Pas le livre audio ?</strong>
+          <ul>
+            <li><a href="https://www.litteratureaudio.com/" target="_blank" rel="noopener">Littérature audio</a> — livres lus, gratuits, en MP3</li>
+            <li><a href="https://www.audiocite.net/" target="_blank" rel="noopener">Audiocité</a> — lectures libres de droits</li>
+            <li><a href="https://librivox.org/search?primary_key=2&amp;search_category=language&amp;search_page=1&amp;search_form=get_results" target="_blank" rel="noopener">LibriVox</a> — livres audio du domaine public (dont en français)</li>
+          </ul>
+        </div>
+        <div>
+          <strong>Pas le PDF ?</strong>
+          <ul>
+            <li><a href="https://fr.wikisource.org/" target="_blank" rel="noopener">Wikisource</a> — classiques, export PDF</li>
+            <li><a href="https://www.ebooksgratuits.com/" target="_blank" rel="noopener">Ebooks libres et gratuits</a> — PDF soignés</li>
+            <li><a href="https://www.bibebook.com/" target="_blank" rel="noopener">Bibebook</a> — domaine public en PDF</li>
+            <li><a href="https://www.gutenberg.org/browse/languages/fr" target="_blank" rel="noopener">Projet Gutenberg</a> — milliers de livres libres</li>
+          </ul>
+        </div>
+      </div>
+
+      <p id="quotaInfo" class="quota-info" hidden><i></i><span></span></p>
+      <p class="muted add-how">Le texte est lu dans le PDF, l'audio est transcrit par Whisper sur le PC qui héberge Lisio, puis les deux sont synchronisés mot à mot. Garde la page ouverte pendant le traitement. Fichiers audio : MP3 de préférence.</p>
+
+      <form id="addForm" class="add-form">
+        <div class="fields">
+          <label>Titre<input name="title" required placeholder="Pot-Bouille"></label>
+          <label>Auteur<input name="author" placeholder="Émile Zola"></label>
+          <label class="short">Année<input name="year" placeholder="1882" inputmode="numeric"></label>
+        </div>
+        <div class="cover-pick">
+          <span class="lbl">Couleur de couverture</span>
+          <div id="coverColors" class="cover-colors"></div>
+        </div>
+        <div class="drops">
+          <label class="drop" id="dropPdf" tabindex="0">
+            <input type="file" accept="application/pdf,.pdf" hidden>
+            <span class="drop-ico">PDF</span>
+            <strong>Le livre (PDF)</strong>
+            <span class="muted">Glisse le fichier ici ou clique</span>
+          </label>
+          <label class="drop" id="dropAudio" tabindex="0">
+            <input type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.opus,.flac" multiple hidden>
+            <span class="drop-ico">♪</span>
+            <strong>Les fichiers audio</strong>
+            <span class="muted">Glisse les fichiers ou le dossier entier, ou clique</span>
+            <button type="button" class="link small" id="pickFolder">Choisir un dossier</button>
+          </label>
+        </div>
+        <ul class="audio-list pdf-list" id="pdfFile"></ul>
+        <ol class="audio-list" id="audioList"></ol>
+        <p class="estimate" id="estimate"></p>
+        <p class="err" id="addErr" role="alert"></p>
+        <button class="btn primary big" id="addStart" type="submit">Créer le livre audio</button>
+      </form>
+
+      <div id="addProgress" class="add-progress" hidden>
+        <div class="ap-head"><strong id="apTitle"></strong><span id="apEta" class="muted"></span></div>
+        <div class="ap-bar"><i id="apBar"></i></div>
+        <div class="ap-pct" id="apPct">0 %</div>
+        <ol class="ap-stages" id="apStages"></ol>
+        <pre class="ap-log" id="apLog" hidden></pre>
+        <div class="ap-done" id="apDone" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Lecteur -->
+  <section id="reader" class="view" hidden>
+    <header class="rbar">
+      <button class="icon-btn" data-act="back" aria-label="Retour à la bibliothèque"></button>
+      <div class="rtitle">
+        <strong id="rBook"></strong>
+        <select id="chapterSel" aria-label="Chapitre"></select>
+      </div>
+      <div class="rtools">
+        <button class="icon-btn" data-act="search" aria-label="Chercher une citation" title="Chercher (/)"></button>
+        <button class="icon-btn" data-act="notes" aria-label="Mes notes" title="Notes et citations"></button>
+        <button class="icon-btn" data-act="mode" aria-label="Changer d'affichage" title="Page PDF / mode lecture"></button>
+        <button class="icon-btn" data-act="download" aria-label="Télécharger pour le hors ligne" title="Hors ligne"></button>
+        <button class="icon-btn" data-act="fullscreen" aria-label="Plein écran" title="Plein écran (F)"></button>
+        <button class="icon-btn" data-act="settings" aria-label="Paramètres"></button>
+      </div>
+    </header>
+
+    <main class="stage" id="stage">
+      <div id="pdfView" class="scroller" tabindex="-1"></div>
+      <div id="readView" class="scroller" tabindex="-1" hidden><article id="article"></article></div>
+      <button id="followBtn" class="follow" hidden>Revenir à la lecture</button>
+      <div id="loading" class="loading" hidden><div class="spinner"></div><span id="loadingTxt">Chargement…</span></div>
+    </main>
+
+    <aside id="panel" class="panel" aria-hidden="true">
+      <div class="panel-head">
+        <div class="tabs" role="tablist">
+          <button role="tab" data-tab="search">Recherche</button>
+          <button role="tab" data-tab="notes">Notes</button>
+        </div>
+        <button class="icon-btn" data-act="closePanel" aria-label="Fermer"></button>
+      </div>
+      <div class="panel-body" data-pane="search">
+        <select id="searchChap" aria-label="Chapitre où chercher"></select>
+        <input id="searchInput" type="search" placeholder="Tape la citation, même approximative…" autocomplete="off">
+        <div id="searchRes" class="results"></div>
+      </div>
+      <div class="panel-body" data-pane="notes" hidden>
+        <div class="notes-actions">
+          <button class="btn small" data-act="addNoteHere">+ Note ici</button>
+          <button class="btn small" data-act="exportWord">Exporter Word</button>
+          <button class="btn small" data-act="exportMd">Exporter .md</button>
+        </div>
+        <div id="notesList" class="results"></div>
+      </div>
+    </aside>
+
+    <footer class="player">
+      <input type="range" id="seek" min="0" max="1" step="0.1" value="0" aria-label="Position dans le livre">
+      <div class="pl-row">
+        <span id="tCur" class="time">0:00</span>
+        <div class="pl-main">
+          <button class="icon-btn" data-act="back10" aria-label="Reculer de 10 secondes"></button>
+          <button class="play" data-act="play" aria-label="Lecture"></button>
+          <button class="icon-btn" data-act="fwd10" aria-label="Avancer de 10 secondes"></button>
+        </div>
+        <div class="pl-side">
+          <select id="speed" aria-label="Vitesse">
+            <option value="0.5">0,5×</option><option value="0.75">0,75×</option><option value="0.9">0,9×</option>
+            <option value="1">1×</option><option value="1.1">1,1×</option><option value="1.25">1,25×</option>
+            <option value="1.5">1,5×</option><option value="1.75">1,75×</option><option value="2">2×</option>
+            <option value="2.5">2,5×</option><option value="3">3×</option>
+          </select>
+          <span id="tTot" class="time"></span>
+        </div>
+      </div>
+    </footer>
+    <audio id="audio" preload="auto"></audio>
+  </section>
+
+  <!-- Paramètres -->
+  <dialog id="settings">
+    <form method="dialog" class="set-wrap">
+      <header><h2>Paramètres</h2><button class="icon-btn" value="close" aria-label="Fermer"></button></header>
+      <section>
+        <h3>Ambiance</h3>
+        <div class="themes">
+          <label class="theme-opt"><input type="radio" name="theme" value="light"><span class="sw sw-light"></span>Clair</label>
+          <label class="theme-opt"><input type="radio" name="theme" value="dark"><span class="sw sw-dark"></span>Sombre</label>
+          <label class="theme-opt"><input type="radio" name="theme" value="warm"><span class="sw sw-warm"></span>Nuit chaude</label>
+          <label class="theme-opt"><input type="radio" name="theme" value="slate"><span class="sw sw-slate"></span>Ardoise</label>
+        </div>
+      </section>
+      <section>
+        <h3>Langue</h3>
+        <div class="langs">
+          <label class="lang-opt"><input type="radio" name="lang" value="fr"><span>Français</span></label>
+          <label class="lang-opt"><input type="radio" name="lang" value="en"><span>English</span></label>
+          <label class="lang-opt"><input type="radio" name="lang" value="es"><span>Español</span></label>
+          <label class="lang-opt"><input type="radio" name="lang" value="it"><span>Italiano</span></label>
+          <label class="lang-opt"><input type="radio" name="lang" value="de"><span>Deutsch</span></label>
+          <label class="lang-opt"><input type="radio" name="lang" value="pt"><span>Português</span></label>
+        </div>
+      </section>
+      <section>
+        <h3>Couleurs</h3>
+        <div class="colors">
+          <label><input type="color" name="wordColor">Mot lu</label>
+          <label><input type="color" name="sentColor">Phrase lue</label>
+          <label><input type="color" name="hlColor">Surlignage</label>
+          <label><input type="color" name="searchColor">Recherche</label>
+        </div>
+      </section>
+      <section>
+        <h3>Mode lecture</h3>
+        <label class="row">Police
+          <select name="font"><option value="serif">Littéraire</option><option value="sans">Moderne</option></select>
+        </label>
+        <div class="row">Taille du texte
+          <div class="stepper">
+            <button type="button" data-fs="-1" aria-label="Plus petit">A<sup>−</sup></button>
+            <output id="fsOut">100 %</output>
+            <button type="button" data-fs="1" aria-label="Plus grand" class="big-a">A<sup>+</sup></button>
+          </div>
+        </div>
+        <p class="fs-preview" id="fsPreview">« Rue Neuve-Saint-Augustin, un embarras de voitures… »</p>
+        <label class="row"><span>Défilement automatique</span><input type="checkbox" name="autoScroll"></label>
+      </section>
+      <section id="bgSection">
+        <h3>Fond de ce livre</h3>
+        <div class="bgs" id="bgChoices"></div>
+        <label class="btn small file">Choisir une image<input type="file" accept="image/*" id="bgFile" hidden></label>
+      </section>
+      <section>
+        <h3>Compte</h3>
+        <label class="row">Nom ou pseudo<input class="name-in" id="setName" maxlength="40"></label>
+        <p class="row"><span>E-mail</span><span id="setEmail" class="muted"></span></p>
+        <div class="acc-btns"><button class="btn small" type="button" data-act="logout">Se déconnecter</button></div>
+      </section>
+    </form>
+  </dialog>
+
+  <dialog id="confirm" class="mini">
+    <form method="dialog">
+      <p id="confirmMsg"></p>
+      <p id="confirmSub" class="muted"></p>
+      <div class="row"><button value="cancel" class="btn">Annuler</button><button value="ok" id="confirmOk" class="btn danger">Supprimer</button></div>
+    </form>
+  </dialog>
+  <dialog id="bookEdit" class="mini">
+    <form method="dialog">
+      <h2>Modifier le livre</h2>
+      <label>Titre<input name="title" maxlength="120" required></label>
+      <label>Auteur<input name="author" maxlength="120"></label>
+      <label>Année<input name="year" maxlength="10" inputmode="numeric"></label>
+      <label>Couverture</label>
+      <div id="editCovers" class="cover-colors"></div>
+      <div class="row"><button type="button" class="btn" data-close>Annuler</button><button value="ok" class="btn accent">Enregistrer</button></div>
+    </form>
+  </dialog>
+  <div id="ctxMenu" class="ctx" hidden></div>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
