@@ -1024,6 +1024,9 @@ async function downloadBook() {
 const BG_PRESETS = ["", "#efe6d2", "#dfe7df", "#e3e0ee", "#2a2622", "#1d2a2a", "linear-gradient(160deg,#f3d9b1,#d9a77c)", "linear-gradient(160deg,#25313a,#0f1418)"];
 function openSettings() {
   const f = $("#settings form"), p = S.prefs;
+  // site en ligne (sans stockage) : on peut y relier son PC ; 503 = PC relié mais éteint
+  $("#pcCmd").hidden = true;
+  api("/ai/quota").then((q) => ($("#pcSection").hidden = !q.cloud), (e) => ($("#pcSection").hidden = e.status !== 503));
   f.theme.value = p.theme;
   for (const k of ["wordColor", "sentColor", "hlColor", "searchColor", "font"]) f[k].value = p[k];
   $("#fsOut").value = Math.round((p.fontSize / 20) * 100) + " %";
@@ -1080,12 +1083,8 @@ let job = null; // ajout en cours : il continue tant que la page reste ouverte
 
 async function showQuota() {
   const q = (add.quota = await api("/ai/quota").catch(() => null)), el = $("#quotaInfo");
-  // serveur sans stockage de fichiers (ex. site en ligne sans R2) : seul l'ajout par code reste
-  const closed = q && !q.storage;
-  for (const x of $$("#add .add-intro, #add .sources, #add .add-how")) x.hidden = closed;
-  if (closed) { el.hidden = $("#addForm").hidden = true; return; }
   el.hidden = false; el.className = "quota-info " + (q?.ready ? "ok" : "off");
-  el.querySelector("span").textContent = q?.ready ? t("Le PC est prêt à transcrire") : q ? t("Whisper n'est pas lancé sur le PC : le livre attendra dans la file.") : t("Le PC ne répond pas : le livre sera gardé sur cet appareil et envoyé dès qu'il répond.");
+  el.querySelector("span").textContent = q && !q.storage ? t("Aucun PC n'est relié à ce site : Paramètres → « Relier mon PC ».") : q?.ready ? t("Le PC est prêt à transcrire") : q ? t("Whisper n'est pas lancé sur le PC : le livre attendra dans la file.") : t("Le PC ne répond pas : le livre sera gardé sur cet appareil et envoyé dès qu'il répond.");
 }
 function showAdd() {
   if (location.pathname !== "/ajouter") history.pushState(null, "", "/ajouter");
@@ -1193,6 +1192,7 @@ $("#addForm").addEventListener("submit", async (e) => {
   const f = new FormData(e.target), err = $("#addErr"); err.textContent = "";
   if (!add.pdf) return (err.textContent = t("Ajoute le PDF du livre."));
   if (!add.audio.length) return (err.textContent = t("Ajoute au moins un fichier audio."));
+  if (add.quota && !add.quota.storage) return (err.textContent = t("Aucun PC n'est relié à ce site : Paramètres → « Relier mon PC ».")); // site en ligne sans PC relié
   job = { key: Date.now(), user: S.user, title: f.get("title").trim(), author: f.get("author").trim(), year: f.get("year").trim(), colors: add.colors, pdf: add.pdf, audio: [...add.audio], pct: {} };
   $("#addForm").hidden = true; $("#addProgress").hidden = false; renderJob(job);
   const lock = await navigator.wakeLock?.request("screen").catch(() => null); // l'écran reste allumé (téléphone)
@@ -1309,6 +1309,13 @@ const ACTIONS = {
   logout: async () => { await api("/logout", "POST").catch(() => {}); localStorage.clear(); location.href = "/"; },
 };
 document.addEventListener("click", (e) => { const b = e.target.closest("[data-act]"); if (b && ACTIONS[b.dataset.act]) { if (b.closest("dialog") && b.dataset.act !== "logout") return; e.preventDefault(); ACTIONS[b.dataset.act](); } });
+$("#pcPair").addEventListener("click", async () => {
+  try {
+    const { code } = await api("/pc/pair", "POST");
+    $("#cmdLink").textContent = `cd "$HOME\\Downloads\\Lisio"; node scripts/link.mjs ${location.origin} ${code}`;
+    $("#pcCmd").hidden = false;
+  } catch (e) { toast(e.message || t("Pas de connexion internet.")); }
+});
 $("#settings").addEventListener("click", (e) => { const b = e.target.closest("[data-copy]"); if (b) navigator.clipboard?.writeText($("#" + b.dataset.copy).textContent).then(() => toast(t("Commande copiée"))); });
 if (!document.fullscreenEnabled) $$('[data-act="fullscreen"]').forEach((b) => (b.hidden = true));
 document.addEventListener("keydown", (e) => {

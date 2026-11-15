@@ -270,6 +270,15 @@
         <div class="bgs" id="bgChoices"></div>
         <label class="btn small file">Choisir une image<input type="file" accept="image/*" id="bgFile" hidden></label>
       </section>
+      <section id="pcSection" hidden>
+        <h3>Relier mon PC</h3>
+        <p class="muted install-note">Ce site n'a pas de stockage : les livres que tu ajoutes ici sont envoyés à ton PC (avec Lisio installé), qui les transcrit et les garde. Ton PC doit être allumé, avec Lisio lancé, pour transcrire et pour lire ces livres. S'il est éteint, un livre ajouté attend sur ton appareil.</p>
+        <button type="button" class="btn small" id="pcPair">Relier mon PC</button>
+        <div id="pcCmd" hidden>
+          <p class="muted install-note">Sur ton PC, ouvre PowerShell et colle cette commande (valable 15 min), puis redémarre Lisio :</p>
+          <div class="install-cmd"><code id="cmdLink"></code><button type="button" class="btn small" data-copy="cmdLink">Copier</button></div>
+        </div>
+      </section>
       <section>
         <h3>Installer Lisio sur un PC</h3>
         <p class="muted install-note">Windows : ouvre PowerShell (touche Windows, tape « PowerShell ») et colle :</p>

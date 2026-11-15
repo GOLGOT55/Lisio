@@ -62,6 +62,15 @@ SIGNUP=off
 
 puis relance Lisio.
 
+## Relier un site en ligne à ton PC
+
+Tu peux aussi déployer Lisio sur Cloudflare Workers (offre gratuite, `wrangler deploy` avec ta propre base D1) pour avoir une adresse fixe. Sans stockage de fichiers (R2), ce site envoie les livres ajoutés à **ton PC**, qui les transcrit et les garde :
+
+1. Sur le site en ligne : **Paramètres → Relier mon PC**. Une commande s'affiche (valable 15 min).
+2. Sur ton PC (Lisio installé) : colle-la dans PowerShell, puis redémarre Lisio. `cloudflared` doit être installé (la commande d'installation Windows s'en charge).
+
+Au démarrage, Lisio ouvre un tunnel Cloudflare gratuit et donne son adresse au site. Ensuite, depuis le site (PC ou téléphone), tu ajoutes un livre par glisser-déposer : il part vers ton PC, qui le transcrit. Ton PC doit être allumé pour transcrire et pour lire ces livres ; s'il est éteint, un livre ajouté attend sur ton appareil et part dès que le PC répond.
+
 ## Partager un livre
 
 - **Sur le même Lisio** : menu « … » d'un livre → Partager. Donne le code ; l'autre compte l'entre dans « Ajouter un livre ».

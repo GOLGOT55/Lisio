@@ -95,9 +95,34 @@ async function api(req, env, path) {
     return bk ? json({ ...bk, colors: JSON.parse(bk.colors) }, 200, { "access-control-allow-origin": "*" }) : json({ error: "Code inconnu." }, 404, { "access-control-allow-origin": "*" });
   }
 
-  // File d'attente : scripts/queue.mjs (sur ce PC, clé QUEUE_KEY de .dev.vars) transcrit et synchronise les livres envoyés
+  // ---------- PC relié : un site en ligne sans stockage envoie les fichiers au PC de son hébergeur, qui transcrit et les garde ----------
+  if (path === "/api/health") return json({ ok: true });
+  // stockage de ce PC, utilisé par le site en ligne relié (clé QUEUE_KEY)
+  const st = path.match(/^\/api\/store\/([a-z0-9-]{1,64}\/(?:book\.pdf|book\.json|pdf\.json|job\.json|audio\/\d{3}\.mp3))$/);
+  if (st) {
+    if (!env.QUEUE_KEY || !env.R2 || env.R2.remote || req.headers.get("x-queue-key") !== env.QUEUE_KEY) return bad("Interdit.", 403);
+    if (method === "PUT") return r2Put(req, env, st[1], req.headers.get("content-type") || "application/octet-stream", 200e6);
+    return (await env.R2.head(st[1])) ? json({ ok: true }) : bad("Introuvable.", 404);
+  }
+  // scripts/link.mjs : le PC donne sa clé avec le code affiché dans les Paramètres du site en ligne
+  if (path === "/api/pc/link" && method === "POST") {
+    const b = await body(req), pc = await pcRow(env);
+    if (!pc?.pair_code || pc.pair_exp < Date.now() || String(b?.code || "").toUpperCase() !== pc.pair_code || !/^\w{32,128}$/.test(b?.key || "")) return bad("Code invalide ou expiré.", 403);
+    await env.DB.prepare("UPDATE pc SET key = ?, owner = pair_owner, url = NULL, pair_code = NULL WHERE id = 1").bind(b.key).run();
+    return json({ ok: true });
+  }
+  // scripts/tunnel.mjs : adresse publique actuelle du PC (tunnel Cloudflare gratuit, elle change à chaque lancement)
+  if (path === "/api/pc/url" && method === "POST") {
+    const b = await body(req), pc = await pcRow(env);
+    if (!pc?.key || req.headers.get("x-queue-key") !== pc.key || !/^https:\/\/[a-z0-9.-]+$/i.test(b?.url || "")) return bad("Interdit.", 403);
+    await env.DB.prepare("UPDATE pc SET url = ?, updated = ? WHERE id = 1").bind(b.url, Date.now()).run();
+    return json({ ok: true });
+  }
+
+  // File d'attente : scripts/queue.mjs (sur le PC, clé QUEUE_KEY de .dev.vars) transcrit et synchronise les livres envoyés
   if (path.startsWith("/api/queue")) {
-    if (!env.QUEUE_KEY || !env.R2 || req.headers.get("x-queue-key") !== env.QUEUE_KEY) return bad("Interdit.", 403);
+    const qk = env.QUEUE_KEY || (env.R2?.remote && (await pcRow(env))?.key);
+    if (!qk || !env.R2 || req.headers.get("x-queue-key") !== qk) return bad("Interdit.", 403);
     if (path === "/api/queue" && method === "GET")
       return json((await env.DB.prepare("SELECT id, title, author FROM books WHERE status = 'queued' AND r2 = 1 ORDER BY created").all()).results);
     const q = path.match(/^\/api\/queue\/([a-z0-9-]{1,64})\/(book\.json|progress|done|fail)$/);
@@ -219,8 +244,21 @@ async function api(req, env, path) {
   }
   // ---------- Ajout de livres : transcription par Whisper sur ce PC (whisper/server.py) ----------
   if (path === "/api/ai/quota" && method === "GET") {
-    const ok = !!env.R2 && await fetch(WHISPER + "/health").then((r) => r.ok).catch(() => false);
-    return json({ used: 0, limit: -1, left: -1, storage: !!env.R2, ready: ok });
+    // site en ligne : PC relié joignable → prêt ; PC relié éteint → 503 (le livre attend sur l'appareil) ; aucun PC relié
+    if (!env.R2 || env.R2.remote) {
+      if (!env.R2) return (await pcRow(env))?.key ? bad("Le PC ne répond pas.", 503) : json({ storage: false, ready: false, cloud: true });
+      return (await fetch(env.R2.remote + "/api/health").then((r) => r.ok).catch(() => false)) ? json({ storage: true, ready: true, cloud: true }) : bad("Le PC ne répond pas.", 503);
+    }
+    const ok = await fetch(WHISPER + "/health").then((r) => r.ok).catch(() => false);
+    return json({ storage: true, ready: ok });
+  }
+  if (path === "/api/pc/pair" && method === "POST") {
+    const pc = await pcRow(env);
+    if (pc?.owner && pc.owner !== user.id) return bad("Un autre compte a déjà relié son PC à ce site.", 403);
+    const code = shareCode().slice(0, 8);
+    await env.DB.prepare("INSERT INTO pc (id, pair_code, pair_exp, pair_owner) VALUES (1, ?1, ?2, ?3) ON CONFLICT (id) DO UPDATE SET pair_code = ?1, pair_exp = ?2, pair_owner = ?3")
+      .bind(code, Date.now() + 15 * 60000, user.id).run();
+    return json({ code });
   }
   if (path === "/api/books" && method === "POST") {
     const b = await body(req), s = (v, k) => (typeof v === "string" ? v.trim().slice(0, k) : "");
@@ -257,8 +295,22 @@ async function r2Put(req, env, key, type, max) {
   if (!n || n > max) return bad("Fichier trop gros.", 413);
   const { readable, writable } = new FixedLengthStream(n);
   req.body.pipeTo(writable).catch(() => {});
-  await env.R2.put(key, readable, { httpMetadata: { contentType: type, cacheControl: type === "application/json" ? "no-cache" : "public, max-age=604800" } });
+  try { await env.R2.put(key, readable, { httpMetadata: { contentType: type, cacheControl: type === "application/json" ? "no-cache" : "public, max-age=604800" } }); }
+  catch { return bad("Le PC ne répond pas.", 503); } // PC relié éteint
   return json({ ok: true });
+}
+const pcRow = (env) => env.DB.prepare("SELECT * FROM pc WHERE id = 1").first().catch(() => null);
+// « R2 » d'un site en ligne relié : les fichiers sont envoyés au PC et lus chez lui
+function pcStore(pc) {
+  const store = (key) => `${pc.url}/api/store/${key}`;
+  return {
+    remote: pc.url,
+    async put(key, body, o) {
+      const r = await fetch(store(key), { method: "PUT", headers: { "x-queue-key": pc.key, "content-type": o?.httpMetadata?.contentType || "application/octet-stream" }, body });
+      if (!r.ok) throw new Error("PC " + r.status);
+    },
+    head: (key) => fetch(store(key), { headers: { "x-queue-key": pc.key } }).then((r) => (r.ok ? {} : null)),
+  };
 }
 
 // Catalogue : livres statiques + livres ajoutés visibles par ce compte (les siens ou reçus par un code) ; ses livres en file d'attente avec leur état
@@ -270,6 +322,13 @@ async function catalogJson(req, env) {
 }
 // Fichiers d'un livre ajouté en ligne (R2), avec les plages d'octets pour pouvoir sauter dans l'audio
 async function r2File(req, env, key) {
+  if (env.R2.remote) { // site en ligne relié : seuls les livres ajoutés (r2 = 1) sont chez le PC, pas les livres statiques
+    if (!(await env.DB.prepare("SELECT 1 FROM books WHERE id = ? AND r2 = 1").bind(key.split("/")[0]).first())) return null;
+    const r = await fetch(`${env.R2.remote}/books/${key.split("/").map(encodeURIComponent).join("/")}`, { headers: req.headers.has("range") ? { range: req.headers.get("range") } : {} }).catch(() => null);
+    if (!r) return bad("Le PC ne répond pas.", 503);
+    const h = new Headers(r.headers); h.set("access-control-allow-origin", "*");
+    return new Response(r.body, { status: r.status, headers: h });
+  }
   const obj = await env.R2.get(key, { range: req.headers });
   if (!obj) return null;
   const h = new Headers({ "accept-ranges": "bytes", etag: obj.httpEtag, "access-control-allow-origin": "*" }); // * : copie d'un livre partagé vers un autre PC Lisio
@@ -286,6 +345,7 @@ async function r2File(req, env, key) {
 export default {
   async fetch(req, env) {
     const path = new URL(req.url).pathname;
+    if (!env.R2 && (path.startsWith("/api/") || path.startsWith("/books/"))) { const pc = await pcRow(env); if (pc?.url && pc.key) env = { ...env, R2: pcStore(pc) }; }
     if (path.startsWith("/api/")) {
       try { return await api(req, env, path); }
       catch (e) { console.error(e); return bad("Erreur serveur.", 500); }

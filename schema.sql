@@ -56,3 +56,5 @@ CREATE TABLE IF NOT EXISTS books (id TEXT PRIMARY KEY, owner_id INTEGER NOT NULL
 
 -- livre envoyé au PC : avancement de la transcription (scripts/queue.mjs) ou erreur
 CREATE TABLE IF NOT EXISTS jobs (book_id TEXT PRIMARY KEY, progress REAL NOT NULL DEFAULT 0, error TEXT, updated INTEGER NOT NULL);
+-- site en ligne relié à un PC (une seule ligne) : clé du PC, compte qui l'a relié, adresse actuelle du tunnel, code d'appairage
+CREATE TABLE IF NOT EXISTS pc (id INTEGER PRIMARY KEY CHECK (id = 1), key TEXT, owner INTEGER, url TEXT, updated INTEGER, pair_code TEXT, pair_exp INTEGER, pair_owner INTEGER);

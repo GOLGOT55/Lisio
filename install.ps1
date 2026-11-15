@@ -17,6 +17,7 @@ function Need($cmd, $id, $name) {
 }
 Need "node" "OpenJS.NodeJS.LTS" "Node.js"
 Need "py" "Python.Python.3.12" "Python 3"  # « py » : le raccourci « python » du Microsoft Store n'est pas un vrai Python
+Need "cloudflared" "Cloudflare.cloudflared" "cloudflared (tunnel gratuit, pour le téléphone hors de chez toi)"
 
 Write-Host "Téléchargement de Lisio..."
 $tmp = Join-Path $env:TEMP ("lisio-" + [guid]::NewGuid())
