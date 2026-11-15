@@ -42,12 +42,14 @@ async function run(b) {
   // transcriptions déjà faites gardées sur le disque : un redémarrage du PC reprend où il en était
   mkdirSync(CACHE, { recursive: true });
   const cache = `${CACHE}/${b.id}.json`, tr = existsSync(cache) ? JSON.parse(readFileSync(cache, "utf8")) : [];
-  const t0 = Date.now();
+  const t0 = Date.now(), k0 = tr.length, sec = (a, b) => job.chunks.slice(a, b).reduce((s, c) => s + (c.duration || 0), 0);
   for (let k = tr.length; k < job.chunks.length; k++) {
     const c = job.chunks[k], name = `audio/${String(k + 1).padStart(3, "0")}.${c.ext}`;
     tr.push(await transcribe(await (await file(b.id, name)).blob(), c.mime));
     writeFileSync(cache, JSON.stringify(tr));
-    await post(b.id, "progress", { progress: ((k + 1) / job.chunks.length) * 95 });
+    // temps restant : vitesse de Whisper mesurée sur ce lancement (secondes de calcul par seconde d'audio)
+    const done = sec(k0, k + 1), eta = done ? ((Date.now() - t0) / 1000 / done) * sec(k + 1) : undefined;
+    await post(b.id, "progress", { progress: ((k + 1) / job.chunks.length) * 95, eta });
   }
   const { book, coverage } = align(pdf, job.chunks, tr);
   if (coverage < 0.3) throw new Error(`Le texte du PDF et l'audio ne correspondent pas (${Math.round(coverage * 100)} %). Vérifie que c'est bien le même livre.`);

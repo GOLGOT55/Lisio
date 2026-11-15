@@ -134,14 +134,15 @@ async function api(req, env, path) {
     if (q[2] === "progress") {
       await env.DB.prepare("INSERT INTO jobs (book_id, progress, error, updated) VALUES (?, ?, NULL, ?) ON CONFLICT (book_id) DO UPDATE SET progress = excluded.progress, error = NULL, updated = excluded.updated")
         .bind(q[1], Math.min(100, Math.max(0, +b?.progress || 0)), Date.now()).run();
+      if (+b?.eta >= 0) await env.DB.prepare("INSERT INTO job_eta (book_id, ends) VALUES (?1, ?2) ON CONFLICT (book_id) DO UPDATE SET ends = ?2").bind(q[1], Date.now() + Math.min(+b.eta, 864000) * 1000).run();
       return json({ ok: true });
     }
     if (q[2] === "done") {
       if (!(b?.duration > 0) || !(await env.R2.head(`${q[1]}/book.json`))) return bad("Livre incomplet.");
-      await env.DB.batch([env.DB.prepare("UPDATE books SET status = 'ready', duration = ? WHERE id = ?").bind(b.duration, q[1]), env.DB.prepare("DELETE FROM jobs WHERE book_id = ?").bind(q[1])]);
+      await env.DB.batch([env.DB.prepare("UPDATE books SET status = 'ready', duration = ? WHERE id = ?").bind(b.duration, q[1]), env.DB.prepare("DELETE FROM jobs WHERE book_id = ?").bind(q[1]), env.DB.prepare("DELETE FROM job_eta WHERE book_id = ?").bind(q[1])]);
       return json({ ok: true });
     }
-    await env.DB.batch([env.DB.prepare("UPDATE books SET status = 'failed' WHERE id = ?").bind(q[1]),
+    await env.DB.batch([env.DB.prepare("UPDATE books SET status = 'failed' WHERE id = ?").bind(q[1]), env.DB.prepare("DELETE FROM job_eta WHERE book_id = ?").bind(q[1]),
       env.DB.prepare("INSERT INTO jobs (book_id, progress, error, updated) VALUES (?, 0, ?, ?) ON CONFLICT (book_id) DO UPDATE SET error = excluded.error, updated = excluded.updated").bind(q[1], String(b?.error || "Erreur").slice(0, 500), Date.now())]);
     return json({ ok: true });
   }
@@ -321,7 +322,7 @@ function pcStore(pc) {
 async function catalogJson(req, env) {
   const stat = await env.ASSETS.fetch(new Request(new URL("/books/index.json", req.url))).then((r) => r.json()).catch(() => []);
   const user = await currentUser(req, env);
-  const own = user ? (await env.DB.prepare("SELECT b.id, b.title, b.author, b.year, b.duration, b.colors, b.status, j.progress, j.error FROM books b LEFT JOIN jobs j ON j.book_id = b.id WHERE b.r2 = 1 AND ((b.status = 'ready' AND (b.owner_id = ?1 OR b.id IN (SELECT book_id FROM library WHERE user_id = ?1 AND added = 1))) OR (b.status IN ('queued', 'failed') AND b.owner_id = ?1))").bind(user.id).all()).results : [];
+  const own = user ? (await env.DB.prepare("SELECT b.id, b.title, b.author, b.year, b.duration, b.colors, b.status, j.progress, j.error, MAX(0, (e.ends - ?2) / 1000) AS left FROM books b LEFT JOIN jobs j ON j.book_id = b.id LEFT JOIN job_eta e ON e.book_id = b.id WHERE b.r2 = 1 AND ((b.status = 'ready' AND (b.owner_id = ?1 OR b.id IN (SELECT book_id FROM library WHERE user_id = ?1 AND added = 1))) OR (b.status IN ('queued', 'failed') AND b.owner_id = ?1))").bind(user.id, Date.now()).all()).results : [];
   return json([...stat, ...own.map((b) => ({ ...b, colors: JSON.parse(b.colors) }))], 200, { "cache-control": "no-cache" });
 }
 // Fichiers d'un livre ajouté en ligne (R2), avec les plages d'octets pour pouvoir sauter dans l'audio

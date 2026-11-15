@@ -202,8 +202,9 @@ function renderLibrary() {
     <div class="bar"><i style="width:${pctOf(last)}%"></i></div><button class="btn accent" data-open="${last.id}">${t("▶ Continuer")}</button></div></div>` : "";
   $("#libCount").textContent = shown.length + " " + t(shown.length > 1 ? "livres" : "livre");
   $("#shelf").innerHTML = (S.showHidden ? S.catalog : shown).map((b) => {
-    const pct = pctOf(b), wait = b.status === "queued" || b.status === "failed";
-    const meta = b.status === "failed" ? `<span class="warn">${t("Échec de la transcription")}</span>` : b.status === "queued" ? `<span>${b.progress ? `${t("Transcription sur le PC")} ${Math.round(b.progress)} %` : t("En attente du PC")}</span>`
+    const wait = b.status === "queued" || b.status === "failed", pct = b.status === "queued" ? b.progress || 0 : wait ? 0 : pctOf(b);
+    const eta = b.left != null ? ` · ${t("reste")} <b data-end="${Date.now() + b.left * 1000}">${clock(b.left)}</b>` : "";
+    const meta = b.status === "failed" ? `<span class="warn">${t("Échec de la transcription")}</span>` : b.status === "queued" ? `<span>${b.progress ? `${t("Transcription sur le PC")} ${Math.round(b.progress)} %${eta}` : t("En attente du PC")}</span>`
       : `<span>${pct ? Math.round(pct) + " % " + t("lu") : t("Pas commencé")} · ${dur(b.duration)}</span>`;
     return `<div class="book-wrap${b.hidden ? " is-hidden" : ""}${wait ? " is-wait" : ""}"><button class="book" data-id="${b.id}">${cover(b)}
       <div class="book-name">${esc(b.title)}</div>
@@ -270,6 +271,9 @@ function editBook(b) {
   }, { once: true });
 }
 document.addEventListener("click", (e) => { const c = e.target.closest("[data-close]"); if (c) c.closest("dialog").close(); });
+// décompte jusqu'à 0 : [data-end] = heure de fin (horloge de cet appareil), mis à jour chaque seconde
+const clock = (s) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = String(s % 60).padStart(2, "0"); return h ? `${h}:${String(m).padStart(2, "0")}:${x}` : `${m}:${x}`; };
+setInterval(() => $$("[data-end]").forEach((e) => (e.textContent = clock((+e.dataset.end - Date.now()) / 1000))), 1000);
 const dur = (s) => { const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60); return h ? `${h} h ${String(m).padStart(2, "0")}` : `${m} min`; };
 
 // ---------- Ouverture d'un livre ----------
@@ -1216,6 +1220,7 @@ async function sendJob(j) {
   }
 }
 async function runJob(j) {
+  j.t0 = Date.now();
   const set = (k, v) => { j.pct[k] = v; renderJob(j); };
   // 1. lecture du PDF (mots + positions) et découpage du MP3, dans le navigateur
   set("prep", 1);
@@ -1286,7 +1291,10 @@ function renderJob(j) {
     const v = j.pct[k] || 0, ok = v >= 100 || j.done;
     return `<li class="${ok ? "ok" : (v > 0 || i === cur) && !j.error ? "run" : ""}"><span class="st">${ok ? "✓" : ""}</span>${t(label)}<span class="muted">${!ok && v >= 1 ? Math.floor(v) + " %" : ""}</span></li>`;
   }).join("");
-  $("#apEta").textContent = j.error || j.done ? "" : t("Garde cette page ouverte pendant l'envoi");
+  // temps restant de l'envoi, d'après la vitesse depuis le début (affiché dès qu'elle est fiable)
+  const el = Date.now() - j.t0, left = pct >= 2 && el > 4000 ? (el * (100 - pct)) / pct : null;
+  $("#apEta").innerHTML = j.error || j.done ? "" : left == null ? t("Garde cette page ouverte pendant l'envoi")
+    : `${t("Temps restant")} <b data-end="${Date.now() + left}">${clock(left / 1000)}</b>`;
   $("#apLog").hidden = !j.error; if (j.error) $("#apLog").textContent = j.error;
   $("#apDone").hidden = !(j.error || j.done);
   $("#apDone").innerHTML = j.error
