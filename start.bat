@@ -27,7 +27,7 @@ node node_modules\wrangler\bin\wrangler.js d1 execute lisio --local --persist-to
 node scripts\queue.mjs init
 start "Lisio - Whisper" /min .venv\Scripts\python whisper\server.py
 start "Lisio - File d'attente" /min node scripts\queue.mjs
-findstr /b "LISIO_CLOUD=" .dev.vars >nul 2>&1 && start "Lisio - Tunnel" /min node scripts\tunnel.mjs
+start "Lisio - Tunnel" /min node scripts\tunnel.mjs
 node scripts\urls.mjs 8787
 node node_modules\wrangler\bin\wrangler.js dev --ip 0.0.0.0 --port 8787 --persist-to data
 pause

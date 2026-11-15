@@ -157,6 +157,7 @@
       <div class="rtools">
         <button class="icon-btn" data-act="search" aria-label="Chercher une citation" title="Chercher (/)"></button>
         <button class="icon-btn" data-act="notes" aria-label="Mes notes" title="Notes et citations"></button>
+        <button class="icon-btn" data-act="share" aria-label="Partager ce livre" title="Partager ce livre"></button>
         <button class="icon-btn" data-act="mode" aria-label="Changer d'affichage" title="Page PDF / mode lecture"></button>
         <button class="icon-btn" data-act="download" aria-label="Télécharger pour le hors ligne" title="Hors ligne"></button>
         <button class="icon-btn" data-act="fullscreen" aria-label="Plein écran" title="Plein écran (F)"></button>
@@ -269,6 +270,12 @@
         <h3>Fond de ce livre</h3>
         <div class="bgs" id="bgChoices"></div>
         <label class="btn small file">Choisir une image<input type="file" accept="image/*" id="bgFile" hidden></label>
+      </section>
+      <section id="phoneSection" hidden>
+        <h3>Ouvrir sur ton téléphone</h3>
+        <p class="muted install-note">Ouvre cette adresse sur ton téléphone, même hors de chez toi (ton PC doit être allumé avec Lisio lancé) :</p>
+        <div class="install-cmd"><code id="phoneUrl"></code><button type="button" class="btn small" data-copy="phoneUrl">Copier</button></div>
+        <p class="muted install-note">Elle change à chaque démarrage de Lisio. Pour une adresse fixe, déploie Lisio sur Cloudflare et relie ton PC (voir le README).</p>
       </section>
       <section id="pcSection" hidden>
         <h3>Relier mon PC</h3>

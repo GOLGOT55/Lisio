@@ -47,7 +47,7 @@ Ton PC est le serveur : il doit être allumé avec Lisio lancé. Ton téléphone
 
 **Partout (4G, ailleurs)** : deux options **gratuites** :
 
-- **Tunnel Cloudflare** (sans compte) : installe `cloudflared` (`winget install --id Cloudflare.cloudflared` sous Windows), puis lance **`start-tunnel.bat`** (ou `./start-tunnel.sh`) pendant que Lisio tourne. Une adresse `https://xxxx.trycloudflare.com` s'affiche : ouvre-la sur ton téléphone. Elle change à chaque lancement. Pour une adresse fixe, crée un tunnel nommé avec un compte Cloudflare gratuit ([guide](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)).
+- **Tunnel Cloudflare** (sans compte) : si `cloudflared` est installé (l'installation le fait ; sinon `winget install --id Cloudflare.cloudflared`), Lisio ouvre le tunnel tout seul au démarrage. Son adresse `https://xxxx.trycloudflare.com` est dans **Paramètres → Ouvrir sur ton téléphone** : ouvre-la sur ton téléphone. Elle change à chaque démarrage. Pour une adresse fixe, déploie Lisio sur Cloudflare et relie ton PC (voir plus bas).
 - **Tailscale** (compte gratuit) : installe Tailscale sur le PC et le téléphone, puis ouvre `http://<nom-du-pc>:8787` depuis le téléphone. Rien n'est exposé sur Internet.
 
 En https (tunnel), tu peux aussi « Ajouter à l'écran d'accueil » pour l'utiliser comme une app.

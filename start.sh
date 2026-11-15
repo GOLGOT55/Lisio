@@ -21,8 +21,8 @@ node scripts/queue.mjs init
 WHISPER=$!
 node scripts/queue.mjs &
 QUEUE=$!
-TUNNEL=
-grep -q '^LISIO_CLOUD=' .dev.vars 2>/dev/null && { node scripts/tunnel.mjs & TUNNEL=$!; }
+node scripts/tunnel.mjs &
+TUNNEL=$!
 trap 'kill $WHISPER $QUEUE $TUNNEL 2>/dev/null' EXIT
 node scripts/urls.mjs 8787
 node node_modules/wrangler/bin/wrangler.js dev --ip 0.0.0.0 --port 8787 --persist-to data

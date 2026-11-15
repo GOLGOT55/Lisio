@@ -113,9 +113,10 @@ async function api(req, env, path) {
   }
   // scripts/tunnel.mjs : adresse publique actuelle du PC (tunnel Cloudflare gratuit, elle change à chaque lancement)
   if (path === "/api/pc/url" && method === "POST") {
-    const b = await body(req), pc = await pcRow(env);
-    if (!pc?.key || req.headers.get("x-queue-key") !== pc.key || !/^https:\/\/[a-z0-9.-]+$/i.test(b?.url || "")) return bad("Interdit.", 403);
-    await env.DB.prepare("UPDATE pc SET url = ?, updated = ? WHERE id = 1").bind(b.url, Date.now()).run();
+    const b = await body(req), pc = await pcRow(env), k = req.headers.get("x-queue-key");
+    const self = env.R2 && !env.R2.remote && env.QUEUE_KEY && k === env.QUEUE_KEY; // ce PC : adresse pour le téléphone
+    if (!(self || (pc?.key && k === pc.key)) || !/^https:\/\/[a-z0-9.-]+$/i.test(b?.url || "")) return bad("Interdit.", 403);
+    await env.DB.prepare("INSERT INTO pc (id, url, updated) VALUES (1, ?1, ?2) ON CONFLICT (id) DO UPDATE SET url = ?1, updated = ?2").bind(b.url, Date.now()).run();
     return json({ ok: true });
   }
 
@@ -219,7 +220,7 @@ async function api(req, env, path) {
   if ((m = path.match(/^\/api\/books\/([^/]+)\/share$/)) && method === "POST") {
     if (!validId(m[1])) return bad("Livre invalide.");
     const bk = await env.DB.prepare("SELECT owner_id, share FROM books WHERE id = ?").bind(m[1]).first();
-    const can = !bk || bk.owner_id === user.id || await env.DB.prepare("SELECT 1 FROM library WHERE user_id = ? AND book_id = ? AND added = 1").bind(user.id, m[1]).first();
+    const can = !bk || bk.owner_id === 0 || bk.owner_id === user.id || await env.DB.prepare("SELECT 1 FROM library WHERE user_id = ? AND book_id = ? AND added = 1").bind(user.id, m[1]).first();
     if (!can) return bad("Interdit.", 403);
     if (bk?.share) return json({ code: bk.share });
     const code = shareCode();
@@ -252,6 +253,9 @@ async function api(req, env, path) {
     const ok = await fetch(WHISPER + "/health").then((r) => r.ok).catch(() => false);
     return json({ storage: true, ready: ok });
   }
+  // Lisio hébergé sur ce PC : adresse publique actuelle (tunnel) pour l'ouvrir sur le téléphone
+  if (path === "/api/pc/address" && method === "GET")
+    return json({ url: env.R2 && !env.R2.remote ? (await pcRow(env))?.url || null : null });
   if (path === "/api/pc/pair" && method === "POST") {
     const pc = await pcRow(env);
     if (pc?.owner && pc.owner !== user.id) return bad("Un autre compte a déjà relié son PC à ce site.", 403);
