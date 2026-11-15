@@ -58,6 +58,7 @@
         <h1 class="lib-title">Ma bibliothèque</h1>
         <span class="lib-count" id="libCount"></span>
       </div>
+      <p id="outboxNote" class="outbox-note" hidden></p>
       <div class="shelf" id="shelf"></div>
     </div>
   </section>
@@ -100,7 +101,7 @@
       </div>
 
       <p id="quotaInfo" class="quota-info" hidden><i></i><span></span></p>
-      <p class="muted add-how">Ça marche sur ordinateur comme sur téléphone : le texte est lu dans le PDF, l'audio est transcrit par Whisper sur le PC qui héberge Lisio, puis les deux sont synchronisés mot à mot. Garde la page ouverte pendant le traitement. Fichiers audio : MP3 uniquement.</p>
+      <p class="muted add-how">Ça marche sur ordinateur comme sur téléphone : ta page lit le PDF et découpe l'audio, puis envoie tout au PC qui héberge Lisio. Le PC transcrit avec Whisper et synchronise tout seul, même page fermée. Si le PC est éteint, le livre attend sur ton appareil. Fichiers audio : MP3 uniquement.</p>
 
       <form id="addForm" class="add-form">
         <div class="fields">
@@ -268,6 +269,14 @@
         <h3>Fond de ce livre</h3>
         <div class="bgs" id="bgChoices"></div>
         <label class="btn small file">Choisir une image<input type="file" accept="image/*" id="bgFile" hidden></label>
+      </section>
+      <section>
+        <h3>Installer Lisio sur un PC</h3>
+        <p class="muted install-note">Windows : ouvre PowerShell (touche Windows, tape « PowerShell ») et colle :</p>
+        <div class="install-cmd"><code id="cmdWin">irm https://raw.githubusercontent.com/GOLGOT55/Lisio/main/install.ps1 | iex</code><button type="button" class="btn small" data-copy="cmdWin">Copier</button></div>
+        <p class="muted install-note">macOS ou Linux : dans le Terminal :</p>
+        <div class="install-cmd"><code id="cmdUnix">curl -fsSL https://raw.githubusercontent.com/GOLGOT55/Lisio/main/install.sh | bash</code><button type="button" class="btn small" data-copy="cmdUnix">Copier</button></div>
+        <p class="muted install-note">Ça crée un dossier « Lisio » dans Téléchargements, avec tout dedans : le programme, Whisper et tes données (comptes, livres) dans Lisio/data. Node.js et Python sont installés s'ils manquent, puis Lisio se lance. Sous Windows, Lisio démarre ensuite tout seul quand le PC s'allume, pour transcrire les livres en attente.</p>
       </section>
       <section>
         <h3>Compte</h3>

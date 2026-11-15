@@ -95,6 +95,31 @@ async function api(req, env, path) {
     return bk ? json({ ...bk, colors: JSON.parse(bk.colors) }, 200, { "access-control-allow-origin": "*" }) : json({ error: "Code inconnu." }, 404, { "access-control-allow-origin": "*" });
   }
 
+  // File d'attente : scripts/queue.mjs (sur ce PC, clé QUEUE_KEY de .dev.vars) transcrit et synchronise les livres envoyés
+  if (path.startsWith("/api/queue")) {
+    if (!env.QUEUE_KEY || !env.R2 || req.headers.get("x-queue-key") !== env.QUEUE_KEY) return bad("Interdit.", 403);
+    if (path === "/api/queue" && method === "GET")
+      return json((await env.DB.prepare("SELECT id, title, author FROM books WHERE status = 'queued' AND r2 = 1 ORDER BY created").all()).results);
+    const q = path.match(/^\/api\/queue\/([a-z0-9-]{1,64})\/(book\.json|progress|done|fail)$/);
+    const bk = q && await env.DB.prepare("SELECT status FROM books WHERE id = ? AND r2 = 1").bind(q[1]).first();
+    if (bk?.status !== "queued") return bad("Livre introuvable.", 404);
+    if (q[2] === "book.json" && method === "PUT") return r2Put(req, env, `${q[1]}/book.json`, "application/json", 100e6);
+    const b = await body(req);
+    if (q[2] === "progress") {
+      await env.DB.prepare("INSERT INTO jobs (book_id, progress, error, updated) VALUES (?, ?, NULL, ?) ON CONFLICT (book_id) DO UPDATE SET progress = excluded.progress, error = NULL, updated = excluded.updated")
+        .bind(q[1], Math.min(100, Math.max(0, +b?.progress || 0)), Date.now()).run();
+      return json({ ok: true });
+    }
+    if (q[2] === "done") {
+      if (!(b?.duration > 0) || !(await env.R2.head(`${q[1]}/book.json`))) return bad("Livre incomplet.");
+      await env.DB.batch([env.DB.prepare("UPDATE books SET status = 'ready', duration = ? WHERE id = ?").bind(b.duration, q[1]), env.DB.prepare("DELETE FROM jobs WHERE book_id = ?").bind(q[1])]);
+      return json({ ok: true });
+    }
+    await env.DB.batch([env.DB.prepare("UPDATE books SET status = 'failed' WHERE id = ?").bind(q[1]),
+      env.DB.prepare("INSERT INTO jobs (book_id, progress, error, updated) VALUES (?, 0, ?, ?) ON CONFLICT (book_id) DO UPDATE SET error = excluded.error, updated = excluded.updated").bind(q[1], String(b?.error || "Erreur").slice(0, 500), Date.now())]);
+    return json({ ok: true });
+  }
+
   const user = await currentUser(req, env);
   if (!user) return bad("Non connecté.", 401);
 
@@ -197,13 +222,6 @@ async function api(req, env, path) {
     const ok = !!env.R2 && await fetch(WHISPER + "/health").then((r) => r.ok).catch(() => false);
     return json({ used: 0, limit: -1, left: -1, storage: !!env.R2, ready: ok });
   }
-  if (path === "/api/ai/transcribe" && method === "POST") {
-    const n = +req.headers.get("content-length") || 0;
-    if (!n || n > 40_000_000) return bad("Morceau audio trop gros.", 413);
-    const res = await fetch(WHISPER + "/transcribe", { method: "POST", headers: { "x-mime": req.headers.get("x-mime") || "" }, body: req.body }).catch(() => null);
-    if (!res) return json({ error: "Whisper ne répond pas : lance start (ou whisper/server.py).", retry: true }, 502);
-    return new Response(res.body, { status: res.status, headers: { "content-type": "application/json" } });
-  }
   if (path === "/api/books" && method === "POST") {
     const b = await body(req), s = (v, k) => (typeof v === "string" ? v.trim().slice(0, k) : "");
     const title = s(b?.title, 120); if (!title) return bad("Titre manquant.");
@@ -213,16 +231,15 @@ async function api(req, env, path) {
       .bind(id, user.id, Date.now(), title, s(b.author, 120), s(b.year, 10), JSON.stringify(colors)).run();
     return json({ id });
   }
-  if ((m = path.match(/^\/api\/books\/([a-z0-9-]{1,64})\/(?:files\/(book\.pdf|book\.json|audio\/\d{3}\.mp3)|(publish))$/))) {
+  // fichiers d'un livre en cours d'ajout, puis « queue » (le PC transcrit) ou « publish » (livre copié d'un autre PC, déjà synchronisé)
+  if ((m = path.match(/^\/api\/books\/([a-z0-9-]{1,64})\/(?:files\/(book\.pdf|book\.json|pdf\.json|job\.json|audio\/\d{3}\.mp3)|(publish|queue|retry))$/))) {
     const bk = await env.DB.prepare("SELECT owner_id, status FROM books WHERE id = ? AND r2 = 1").bind(m[1]).first();
-    if (!bk || bk.owner_id !== user.id || bk.status !== "draft") return bad("Interdit.", 403);
-    if (m[2] && method === "PUT") {
-      const n = +req.headers.get("content-length") || 0, max = m[2] === "book.pdf" ? 200e6 : m[2] === "book.json" ? 100e6 : 60e6;
-      if (!n || n > max) return bad("Fichier trop gros.", 413);
-      const type = m[2].endsWith(".pdf") ? "application/pdf" : m[2].endsWith(".json") ? "application/json" : m[2].endsWith(".mp3") ? "audio/mpeg" : "audio/" + m[2].split(".").pop();
-      const { readable, writable } = new FixedLengthStream(n);
-      req.body.pipeTo(writable).catch(() => {});
-      await env.R2.put(`${m[1]}/${m[2]}`, readable, { httpMetadata: { contentType: type, cacheControl: "public, max-age=604800" } });
+    if (!bk || bk.owner_id !== user.id || bk.status !== (m[3] === "retry" ? "failed" : "draft")) return bad("Interdit.", 403);
+    if (m[2] && method === "PUT")
+      return r2Put(req, env, `${m[1]}/${m[2]}`, m[2].endsWith(".pdf") ? "application/pdf" : m[2].endsWith(".json") ? "application/json" : "audio/mpeg", m[2] === "book.pdf" ? 200e6 : m[2].endsWith(".json") ? 100e6 : 60e6);
+    if ((m[3] === "queue" || m[3] === "retry") && method === "POST") {
+      for (const f of ["book.pdf", "pdf.json", "job.json"]) if (!(await env.R2.head(`${m[1]}/${f}`))) return bad("Livre incomplet.");
+      await env.DB.batch([env.DB.prepare("UPDATE books SET status = 'queued' WHERE id = ?").bind(m[1]), env.DB.prepare("DELETE FROM jobs WHERE book_id = ?").bind(m[1])]);
       return json({ ok: true });
     }
     if (m[3] && method === "POST") {
@@ -235,11 +252,20 @@ async function api(req, env, path) {
   return bad("Introuvable.", 404);
 }
 
-// Catalogue : livres statiques + livres ajoutés en ligne visibles par ce compte (les siens ou reçus par un code)
+async function r2Put(req, env, key, type, max) {
+  const n = +req.headers.get("content-length") || 0;
+  if (!n || n > max) return bad("Fichier trop gros.", 413);
+  const { readable, writable } = new FixedLengthStream(n);
+  req.body.pipeTo(writable).catch(() => {});
+  await env.R2.put(key, readable, { httpMetadata: { contentType: type, cacheControl: type === "application/json" ? "no-cache" : "public, max-age=604800" } });
+  return json({ ok: true });
+}
+
+// Catalogue : livres statiques + livres ajoutés visibles par ce compte (les siens ou reçus par un code) ; ses livres en file d'attente avec leur état
 async function catalogJson(req, env) {
   const stat = await env.ASSETS.fetch(new Request(new URL("/books/index.json", req.url))).then((r) => r.json()).catch(() => []);
   const user = await currentUser(req, env);
-  const own = user ? (await env.DB.prepare("SELECT id, title, author, year, duration, colors FROM books WHERE r2 = 1 AND status = 'ready' AND (owner_id = ?1 OR id IN (SELECT book_id FROM library WHERE user_id = ?1 AND added = 1))").bind(user.id).all()).results : [];
+  const own = user ? (await env.DB.prepare("SELECT b.id, b.title, b.author, b.year, b.duration, b.colors, b.status, j.progress, j.error FROM books b LEFT JOIN jobs j ON j.book_id = b.id WHERE b.r2 = 1 AND ((b.status = 'ready' AND (b.owner_id = ?1 OR b.id IN (SELECT book_id FROM library WHERE user_id = ?1 AND added = 1))) OR (b.status IN ('queued', 'failed') AND b.owner_id = ?1))").bind(user.id).all()).results : [];
   return json([...stat, ...own.map((b) => ({ ...b, colors: JSON.parse(b.colors) }))], 200, { "cache-control": "no-cache" });
 }
 // Fichiers d'un livre ajouté en ligne (R2), avec les plages d'octets pour pouvoir sauter dans l'audio

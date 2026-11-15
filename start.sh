@@ -16,8 +16,11 @@ if [ ! -x .venv/bin/python ]; then
 fi
 
 node node_modules/wrangler/bin/wrangler.js d1 execute lisio --local --persist-to data --file schema.sql >/dev/null
+node scripts/queue.mjs init
 .venv/bin/python whisper/server.py &
 WHISPER=$!
-trap 'kill $WHISPER 2>/dev/null' EXIT
+node scripts/queue.mjs &
+QUEUE=$!
+trap 'kill $WHISPER $QUEUE 2>/dev/null' EXIT
 node scripts/urls.mjs 8787
 node node_modules/wrangler/bin/wrangler.js dev --ip 0.0.0.0 --port 8787 --persist-to data

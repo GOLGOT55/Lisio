@@ -50,6 +50,9 @@ CREATE TABLE IF NOT EXISTS library (
 -- propriétaire d'un livre (absent = livre commun visible par tous) et code de partage
 CREATE TABLE IF NOT EXISTS books (id TEXT PRIMARY KEY, owner_id INTEGER NOT NULL, share TEXT UNIQUE, created INTEGER NOT NULL,
   title TEXT, author TEXT, year TEXT, duration REAL, colors TEXT,
-  status TEXT NOT NULL DEFAULT 'ready', -- 'draft' pendant l'ajout en ligne
+  status TEXT NOT NULL DEFAULT 'ready', -- 'draft' pendant l'envoi, 'queued' en attente de transcription par le PC, 'failed', 'ready'
   r2 INTEGER NOT NULL DEFAULT 0 -- 1 = fichiers dans R2 (ajouté depuis le site)
 );
+
+-- livre envoyé au PC : avancement de la transcription (scripts/queue.mjs) ou erreur
+CREATE TABLE IF NOT EXISTS jobs (book_id TEXT PRIMARY KEY, progress REAL NOT NULL DEFAULT 0, error TEXT, updated INTEGER NOT NULL);

@@ -422,3 +422,10 @@ body:has(#followBtn:not([hidden])) .toast { bottom: 175px; }
 .acc-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .add-how { font-size: 14px; margin: 0 0 18px; max-width: 70ch; }
+/* livres envoyés au PC, pas encore prêts */
+.is-wait .cover { filter: grayscale(.6) opacity(.7); }
+.book-meta .warn { color: #c0392b; }
+.outbox-note { margin: 0 0 18px; padding: 10px 14px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--ink); font-size: 14px; }
+.install-cmd { display: flex; gap: 8px; align-items: center; margin: 6px 0 10px; }
+.install-cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 8px 10px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); font-size: 12px; }
+.install-note { font-size: 13px; margin: 0 0 8px; }

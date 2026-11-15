@@ -1,6 +1,6 @@
 import * as pdfjs from "/vendor/pdf.min.mjs";
 import { DICT, LANGS } from "/i18n.js";
-import { pdfWords, audioChunks, transcribe, align, MAX_BYTES, MAX_SEC } from "/build.js";
+import { pdfWords, audioChunks, MAX_BYTES, MAX_SEC } from "/build.js";
 pdfjs.GlobalWorkerOptions.workerSrc = "/vendor/pdf.worker.min.mjs";
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -16,7 +16,7 @@ const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? 
 let LANG = "fr";
 const t = (s) => DICT[LANG]?.[s] ?? s;
 const ORIG = new WeakMap(); // texte français d'origine de chaque nœud
-const SKIP = "#pdfFile, #quotaInfo, #confirm, #editCovers, #article, #pdfView, #shelf, #resume, #audioList, #searchRes, #notesList, #codeMsg, #apStages, #apDone, .pin, script, style";
+const SKIP = "#pdfFile, #quotaInfo, #confirm, #editCovers, #article, #pdfView, #shelf, #resume, #audioList, #searchRes, #notesList, #codeMsg, #outboxNote, code, #apStages, #apDone, .pin, script, style";
 function translateStatic() {
   document.documentElement.lang = LANG;
   const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.parentElement.closest(SKIP) || !n.nodeValue.trim() ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
@@ -125,6 +125,7 @@ async function boot() {
   const m = location.pathname.match(/^\/livre\/([\w-]+)/);
   const wantAdd = location.pathname === "/ajouter";
   await showLibrary();
+  drainOutbox();
   if (m) openBook(m[1]); else if (wantAdd) showAdd();
 }
 
@@ -195,23 +196,35 @@ function renderLibrary() {
   const cover = (b) => `<div class="cover" style="--c1:${b.colors[0]};--c2:${b.colors[1]}"><span class="c-author">${esc(b.author)}</span><span class="c-title">${esc(b.title)}<span class="c-orn" style="display:block"></span></span><span class="c-year">${esc(b.year || "")}</span></div>`;
   const pctOf = (b) => { const p = S.progress[b.id]; return p ? Math.min(100, (p.time / b.duration) * 100) : 0; };
   // Reprendre : le dernier livre ouvert
-  const last = shown.filter((b) => S.progress[b.id]).sort((a, b) => S.progress[b.id].updated - S.progress[a.id].updated)[0];
+  const last = shown.filter((b) => S.progress[b.id] && !b.status?.match(/queued|failed/)).sort((a, b) => S.progress[b.id].updated - S.progress[a.id].updated)[0];
   $("#resume").innerHTML = last ? `<div class="resume"><button class="book" data-id="${last.id}" aria-label="Ouvrir ${esc(last.title)}">${cover(last)}</button>
     <div><small>${t("Reprendre la lecture")}</small><h2>${esc(last.title)}</h2><p>${esc(last.author)} · ${Math.round(pctOf(last))} % ${t("lu")} · ${dur(last.duration - S.progress[last.id].time)} ${t("restantes")}</p>
     <div class="bar"><i style="width:${pctOf(last)}%"></i></div><button class="btn accent" data-open="${last.id}">${t("▶ Continuer")}</button></div></div>` : "";
   $("#libCount").textContent = shown.length + " " + t(shown.length > 1 ? "livres" : "livre");
   $("#shelf").innerHTML = (S.showHidden ? S.catalog : shown).map((b) => {
-    const pct = pctOf(b);
-    return `<div class="book-wrap${b.hidden ? " is-hidden" : ""}"><button class="book" data-id="${b.id}">${cover(b)}
+    const pct = pctOf(b), wait = b.status === "queued" || b.status === "failed";
+    const meta = b.status === "failed" ? `<span class="warn">${t("Échec de la transcription")}</span>` : b.status === "queued" ? `<span>${b.progress ? `${t("Transcription sur le PC")} ${Math.round(b.progress)} %` : t("En attente du PC")}</span>`
+      : `<span>${pct ? Math.round(pct) + " % " + t("lu") : t("Pas commencé")} · ${dur(b.duration)}</span>`;
+    return `<div class="book-wrap${b.hidden ? " is-hidden" : ""}${wait ? " is-wait" : ""}"><button class="book" data-id="${b.id}">${cover(b)}
       <div class="book-name">${esc(b.title)}</div>
-      <div class="book-meta"><span>${pct ? Math.round(pct) + " % " + t("lu") : t("Pas commencé")} · ${dur(b.duration)}</span>${offline[b.id] ? `<span class="badge">${t("hors ligne")}</span>` : ""}</div>
+      <div class="book-meta">${meta}${offline[b.id] ? `<span class="badge">${t("hors ligne")}</span>` : ""}</div>
       <div class="bar"><i style="width:${pct}%"></i></div>
     </button><button class="book-more" data-more="${b.id}" title="${t("Options du livre")}" aria-label="${t("Options du livre")}">${icon("more")}</button></div>`;
   }).join("") + `<button class="add-card" data-act="addBook"><b>+</b>${t("Ajouter un livre")}</button>`
     + (nHidden ? `<div class="shelf-foot"><button class="btn ghost small" data-act="toggleHidden">${S.showHidden ? t("Masquer les livres retirés") : `${t("Afficher les livres retirés")} (${nHidden})`}</button></div>` : "");
-  $$("#library [data-id], #library [data-open]").forEach((b) => (b.onclick = () => openBook(b.dataset.id || b.dataset.open)));
+  $$("#library [data-id], #library [data-open]").forEach((b) => (b.onclick = () => openOrWait(b.dataset.id || b.dataset.open)));
   $$("#library [data-more]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); bookMenu(b.dataset.more, b); }));
 }
+// livre pas encore prêt : le PC le transcrit, ou a échoué (on peut relancer)
+async function openOrWait(id) {
+  const b = S.catalog.find((x) => x.id === id);
+  if (b?.status === "queued") return toast(t("Le PC transcrit ce livre : il sera prêt bientôt."));
+  if (b?.status !== "failed") return openBook(id);
+  if (await confirmBox(t("Échec de la transcription"), b.error || "", t("Réessayer"), false))
+    api(`/books/${id}/retry`, "POST").then(showLibrary).catch((e) => toast(e.message));
+}
+// la bibliothèque se met à jour pendant que le PC transcrit
+setInterval(() => { if (!$("#library").hidden && S.catalog?.some((b) => b.status === "queued")) showLibrary(); }, 15000);
 function saveLib(b, patch) {
   const cur = S.lib[b.id] || {};
   const o = { title: cur.title ?? null, author: cur.author ?? null, year: cur.year ?? null, colors: cur.colors ?? null, hidden: !!cur.hidden, ...patch };
@@ -1067,13 +1080,12 @@ let job = null; // ajout en cours : il continue tant que la page reste ouverte
 
 async function showQuota() {
   const q = (add.quota = await api("/ai/quota").catch(() => null)), el = $("#quotaInfo");
-  if (!q) { el.hidden = true; return; }
   // serveur sans stockage de fichiers (ex. site en ligne sans R2) : seul l'ajout par code reste
-  for (const x of $$("#add .add-intro, #add .sources, #add .add-how")) x.hidden = !q.storage;
-  if (!q.storage) { el.hidden = $("#addForm").hidden = true; return; }
-  const open = q.ready;
-  el.hidden = false; el.className = "quota-info " + (open && q.left !== 0 ? "ok" : "off");
-  el.querySelector("span").textContent = open ? t("Whisper est prêt sur le PC serveur") : t("Whisper ne répond pas : lance « start » sur le PC qui héberge Lisio.");
+  const closed = q && !q.storage;
+  for (const x of $$("#add .add-intro, #add .sources, #add .add-how")) x.hidden = closed;
+  if (closed) { el.hidden = $("#addForm").hidden = true; return; }
+  el.hidden = false; el.className = "quota-info " + (q?.ready ? "ok" : "off");
+  el.querySelector("span").textContent = q?.ready ? t("Le PC est prêt à transcrire") : q ? t("Whisper n'est pas lancé sur le PC : le livre attendra dans la file.") : t("Le PC ne répond pas : le livre sera gardé sur cet appareil et envoyé dès qu'il répond.");
 }
 function showAdd() {
   if (location.pathname !== "/ajouter") history.pushState(null, "", "/ajouter");
@@ -1151,7 +1163,7 @@ async function putFile(id, name, blob) {
   for (let k = 0; ; k++) {
     const r = await fetch(`/api/books/${id}/files/${name}`, { method: "PUT", body: blob }).catch(() => null);
     if (r?.ok) return;
-    if (k >= 3 || (r && r.status < 500)) throw new Error((await r?.json().catch(() => null))?.error || t("Envoi des fichiers impossible."));
+    if (k >= 3 || (r && r.status < 500)) throw Object.assign(new Error((await r?.json().catch(() => null))?.error || t("Envoi des fichiers impossible.")), { net: !r || r.status >= 502 });
     await new Promise((res) => setTimeout(res, 3000 * (k + 1)));
   }
 }
@@ -1181,53 +1193,85 @@ $("#addForm").addEventListener("submit", async (e) => {
   const f = new FormData(e.target), err = $("#addErr"); err.textContent = "";
   if (!add.pdf) return (err.textContent = t("Ajoute le PDF du livre."));
   if (!add.audio.length) return (err.textContent = t("Ajoute au moins un fichier audio."));
-  await showQuota();
-  if (!add.quota) return (err.textContent = t("Pas de connexion internet."));
-  if (!add.quota.ready) return (err.textContent = t("Whisper ne répond pas : lance « start » sur le PC qui héberge Lisio."));
-  job = { title: f.get("title").trim(), author: f.get("author").trim(), year: f.get("year").trim(), colors: add.colors, pct: {} };
+  job = { key: Date.now(), user: S.user, title: f.get("title").trim(), author: f.get("author").trim(), year: f.get("year").trim(), colors: add.colors, pdf: add.pdf, audio: [...add.audio], pct: {} };
   $("#addForm").hidden = true; $("#addProgress").hidden = false; renderJob(job);
   const lock = await navigator.wakeLock?.request("screen").catch(() => null); // l'écran reste allumé (téléphone)
-  try { await runJob(job); } catch (ex) { job.error = ex.message || String(ex); renderJob(job); } finally { lock?.release().catch(() => {}); }
+  try { await sendJob(job); } catch (ex) { job.error = ex.message || String(ex); renderJob(job); } finally { lock?.release().catch(() => {}); }
 });
+// PC éteint ou injoignable (tunnel : 502/530)
+const isNet = (e) => e instanceof TypeError || e?.net || [502, 503, 504, 530].includes(e?.status);
+async function sendJob(j) {
+  try {
+    if (!(await api("/ai/quota").catch(() => null))) throw Object.assign(new Error(), { net: true });
+    await runJob(j);
+    await outbox.del(j.key).catch(() => {});
+  } catch (ex) {
+    if (!isNet(ex)) { await outbox.del(j.key).catch(() => {}); throw ex; }
+    // gardé sur cet appareil (IndexedDB) : il partira dès que le PC répond
+    const { pct, error, done, local, ...keep } = j;
+    await outbox.put(keep);
+    j.local = j.done = true; renderJob(j); drainSoon();
+  }
+}
 async function runJob(j) {
-  const set = (k, v) => { j.pct[k] = v; if (k === "transcribe" && !j.t1) j.t1 = Date.now(); renderJob(j); };
-  // 1. lecture du PDF (mots + positions) et découpage de l'audio, dans le navigateur
+  const set = (k, v) => { j.pct[k] = v; renderJob(j); };
+  // 1. lecture du PDF (mots + positions) et découpage du MP3, dans le navigateur
   set("prep", 1);
-  const doc = await pdfjs.getDocument({ data: new Uint8Array(await add.pdf.arrayBuffer()) }).promise;
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(await j.pdf.arrayBuffer()) }).promise;
   const pdf = await pdfWords(doc, (x) => set("prep", x * 80));
   doc.destroy();
   const chunks = [];
-  for (const f of add.audio) chunks.push(...(await audioChunks(f)));
+  for (const f of j.audio) chunks.push(...(await audioChunks(f)));
   set("prep", 100);
-  // 2. création du livre, puis envoi des fichiers et transcription en même temps
-  const { id } = await api("/books", "POST", { title: j.title, author: j.author, year: j.year, colors: j.colors });
-  j.id = id;
-  const put = (name, blob) => putFile(id, name, blob);
-  const total = add.pdf.size + chunks.reduce((s, c) => s + c.blob.size, 0); let sent = 0;
-  const uploads = (async () => {
-    await put("book.pdf", add.pdf); sent += add.pdf.size; set("upload", (sent / total) * 100);
-    for (const [k, c] of chunks.entries()) { await put(`audio/${String(k + 1).padStart(3, "0")}.${c.ext}`, c.blob); sent += c.blob.size; set("upload", (sent / total) * 100); }
-  })();
-  const tr = new Array(chunks.length); let next = 0, done = 0;
-  // un morceau à la fois : Whisper traite les morceaux l'un après l'autre
-  const worker = async () => { while (next < chunks.length) { const k = next++; tr[k] = await transcribe(chunks[k], (w) => { j.waiting = w; renderJob(j); }); set("transcribe", (++done / chunks.length) * 100); } };
-  set("transcribe", 0.5);
-  await Promise.all([uploads, worker()]);
-  // 3. synchronisation texte ↔ audio
-  set("sync", 20);
-  await new Promise((res) => setTimeout(res, 50)); // laisse la barre s'afficher avant le calcul
-  const { book, coverage } = align(pdf, chunks, tr);
-  if (coverage < 0.3) throw new Error(`${t("Le texte du PDF et l'audio ne correspondent pas")} (${Math.round(coverage * 100)} %). ${t("Vérifie que c'est bien le même livre.")}`);
-  Object.assign(book, { title: j.title, author: j.author });
-  set("sync", 100);
-  // 4. mise en ligne
-  await put("book.json", new Blob([JSON.stringify(book)], { type: "application/json" }));
-  await api(`/books/${id}/publish`, "POST", { duration: book.duration });
-  j.coverage = coverage; j.done = true; set("publish", 100);
+  // 2. envoi au PC (un livre déjà créé lors d'un essai précédent est complété)
+  if (!j.id) { j.id = (await api("/books", "POST", { title: j.title, author: j.author, year: j.year, colors: j.colors })).id; await outbox.get(j.key).then((o) => o && outbox.put({ ...o, id: j.id })).catch(() => {}); }
+  const json = (o) => new Blob([JSON.stringify(o)], { type: "application/json" });
+  const files = [["book.pdf", j.pdf], ["pdf.json", json(pdf)], ...chunks.map((c, k) => [`audio/${String(k + 1).padStart(3, "0")}.${c.ext}`, c.blob]),
+    ["job.json", json({ chunks: chunks.map((c) => ({ ext: c.ext, mime: c.mime, duration: c.duration })) })]];
+  const total = files.reduce((s, [, b]) => s + b.size, 0); let sent = 0;
+  for (const [name, blob] of files) { await putFile(j.id, name, blob); sent += blob.size; set("upload", (sent / total) * 100); }
+  // 3. file d'attente : le PC transcrit et synchronise tout seul (scripts/queue.mjs)
+  await api(`/books/${j.id}/queue`, "POST");
+  j.done = true; set("queue", 100);
 }
-addEventListener("beforeunload", (e) => { if (job && !job.done && !job.error) e.preventDefault(); }); // fermer la page arrête l'ajout
+addEventListener("beforeunload", (e) => { if (job && !job.done && !job.error) e.preventDefault(); }); // fermer la page arrête l'envoi
 
-const ADD_STAGES = [["prep", "Lecture du PDF et de l'audio", 6], ["upload", "Envoi des fichiers", 24], ["transcribe", "Transcription (IA)", 60], ["sync", "Synchronisation texte ↔ audio", 6], ["publish", "Mise en ligne", 4]];
+// Livres gardés sur cet appareil quand le PC ne répondait pas
+const outbox = {
+  db: () => new Promise((res, rej) => { const r = indexedDB.open("lisio-outbox", 1); r.onupgradeneeded = () => r.result.createObjectStore("jobs", { keyPath: "key" }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }),
+  async run(mode, fn) { const d = await outbox.db(); return new Promise((res, rej) => { const tx = d.transaction("jobs", mode), q = fn(tx.objectStore("jobs")); tx.oncomplete = () => res(q.result); tx.onerror = () => rej(tx.error); }); },
+  all: () => outbox.run("readonly", (s) => s.getAll()),
+  get: (key) => outbox.run("readonly", (s) => s.get(key)),
+  put: (j) => outbox.run("readwrite", (s) => s.put(j)),
+  del: (key) => outbox.run("readwrite", (s) => s.delete(key)),
+};
+let draining = false, drainTimer = 0;
+function drainSoon() { clearTimeout(drainTimer); drainTimer = setTimeout(drainOutbox, 30000); }
+async function drainOutbox() {
+  if (draining || !S.user) return;
+  const list = (await outbox.all().catch(() => [])).filter((o) => o.user === S.user && o.key !== (job && !job.done ? job.key : 0));
+  showOutbox(list.length);
+  if (!list.length) return;
+  if (!(await api("/ai/quota").catch(() => null))) return drainSoon();
+  draining = true;
+  try {
+    for (const o of list) {
+      const j = { ...o, pct: {} };
+      try { await runJob(j); await outbox.del(o.key); toast(`« ${o.title} » ${t("est envoyé au PC ✓")}`); }
+      catch (ex) { if (isNet(ex)) break; await outbox.del(o.key); toast(`« ${o.title} » : ${ex.message}`); }
+    }
+  } finally { draining = false; }
+  const left = (await outbox.all().catch(() => [])).filter((o) => o.user === S.user).length;
+  showOutbox(left);
+  if (left) drainSoon(); else if (!$("#library").hidden) showLibrary();
+}
+function showOutbox(n) {
+  const el = $("#outboxNote"); el.hidden = !n;
+  el.textContent = n ? `${n} ${t(n > 1 ? "livres gardés sur cet appareil : ils partiront vers le PC dès qu'il répondra." : "livre gardé sur cet appareil : il partira vers le PC dès qu'il répondra.")}` : "";
+}
+addEventListener("online", () => drainOutbox());
+
+const ADD_STAGES = [["prep", "Lecture du PDF et de l'audio", 25], ["upload", "Envoi des fichiers au PC", 70], ["queue", "Mise en file d'attente", 5]];
 function renderJob(j) {
   $("#apTitle").textContent = j.title;
   let pct = 0;
@@ -1235,18 +1279,18 @@ function renderJob(j) {
   pct = j.done ? 100 : Math.min(99, pct);
   $("#apBar").style.width = pct + "%"; $("#apPct").textContent = Math.floor(pct) + " %";
   const cur = ADD_STAGES.findIndex(([k]) => (j.pct[k] || 0) < 100);
+  $("#apStages").hidden = !!j.local;
   $("#apStages").innerHTML = ADD_STAGES.map(([k, label], i) => {
     const v = j.pct[k] || 0, ok = v >= 100 || j.done;
     return `<li class="${ok ? "ok" : (v > 0 || i === cur) && !j.error ? "run" : ""}"><span class="st">${ok ? "✓" : ""}</span>${t(label)}<span class="muted">${!ok && v >= 1 ? Math.floor(v) + " %" : ""}</span></li>`;
   }).join("");
-  // temps restant : mesuré sur la transcription (l'étape la plus longue)
-  const p = (j.pct.transcribe || 0) / 100, eta = j.t1 && p > 0.02 && p < 1 ? ((Date.now() - j.t1) / 1000 / p) * (1 - p) + 20 : null;
-  $("#apEta").textContent = j.error ? "" : j.done ? t("Terminé") : (eta ? `${t("Encore ≈")} ${dur(eta)}` : t("Garde cette page ouverte")) + (j.waiting ? ` · ${t("pause demandée par Google…")}` : "");
+  $("#apEta").textContent = j.error || j.done ? "" : t("Garde cette page ouverte pendant l'envoi");
   $("#apLog").hidden = !j.error; if (j.error) $("#apLog").textContent = j.error;
   $("#apDone").hidden = !(j.error || j.done);
   $("#apDone").innerHTML = j.error
-    ? `<strong>${t("Le traitement s'est arrêté.")}</strong><button class="btn small" data-act="resetAdd">${t("Recommencer")}</button>`
-    : j.done ? `<strong>« ${esc(j.title)} » ${t("est prêt ✓")}</strong><span class="muted">${t("Texte et audio synchronisés à")} ${Math.round(j.coverage * 100)} %. ${t("Il apparaît sur tous tes appareils.")}</span><button class="btn accent" data-act="openNew">${t("Ouvrir le livre")}</button>` : "";
+    ? `<strong>${t("L'envoi s'est arrêté.")}</strong><button class="btn small" data-act="resetAdd">${t("Recommencer")}</button>`
+    : j.local ? `<strong>« ${esc(j.title)} » ${t("est gardé sur cet appareil")}</strong><span class="muted">${t("Le PC ne répond pas. Le livre partira tout seul dès qu'il répond : rouvre Lisio quand le PC est allumé.")}</span><button class="btn accent" data-act="doneAdd">${t("Retour à la bibliothèque")}</button>`
+    : j.done ? `<strong>« ${esc(j.title)} » ${t("est envoyé au PC ✓")}</strong><span class="muted">${t("Le PC le transcrit et le synchronise tout seul : tu peux fermer la page. Il apparaîtra dans ta bibliothèque quand il sera prêt.")}</span><button class="btn accent" data-act="doneAdd">${t("Retour à la bibliothèque")}</button>` : "";
 }
 
 // ---------- Actions ----------
@@ -1261,10 +1305,11 @@ const ACTIONS = {
   addNoteHere: () => addNote("note", S.cur, S.cur), exportMd, exportWord,
   addBook: showAdd, toLibrary: () => showLibrary(),
   resetAdd: () => { job = null; add.pdf = null; add.audio = []; renderAdd(); showAdd(); },
-  openNew: async () => { const id = job?.id; job = null; add.pdf = null; add.audio = []; renderAdd(); await showLibrary(); if (id) openBook(id); },
+  doneAdd: () => { job = null; add.pdf = null; add.audio = []; renderAdd(); showLibrary(); },
   logout: async () => { await api("/logout", "POST").catch(() => {}); localStorage.clear(); location.href = "/"; },
 };
 document.addEventListener("click", (e) => { const b = e.target.closest("[data-act]"); if (b && ACTIONS[b.dataset.act]) { if (b.closest("dialog") && b.dataset.act !== "logout") return; e.preventDefault(); ACTIONS[b.dataset.act](); } });
+$("#settings").addEventListener("click", (e) => { const b = e.target.closest("[data-copy]"); if (b) navigator.clipboard?.writeText($("#" + b.dataset.copy).textContent).then(() => toast(t("Commande copiée"))); });
 if (!document.fullscreenEnabled) $$('[data-act="fullscreen"]').forEach((b) => (b.hidden = true));
 document.addEventListener("keydown", (e) => {
   if ($("#reader").hidden || e.target.closest("input, textarea, select, [contenteditable]")) return;

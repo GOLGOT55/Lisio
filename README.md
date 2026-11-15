@@ -4,19 +4,34 @@ Lis un livre PDF pendant que son livre audio le raconte : chaque mot s'allume au
 Lisio est gratuit, open source, et **tourne sur ton propre PC**. Tes comptes, tes livres et tes notes restent chez toi.
 
 - Bibliothèque personnelle : chaque compte a ses livres, retrouvés sur tous ses appareils (PC, téléphone, tablette).
-- Ajout d'un livre depuis le site, sur ordinateur comme sur téléphone : dépose le PDF et les fichiers audio **MP3**, Lisio les synchronise mot à mot avec **Whisper** (installé automatiquement, il tourne sur ton PC, sans clé d'API ni abonnement).
+- Ajout d'un livre depuis le site, sur ordinateur comme sur téléphone : dépose le PDF et les fichiers audio **MP3**. Le livre part dans la **file d'attente** du PC, qui le transcrit avec **Whisper** et le synchronise mot à mot tout seul (sans clé d'API ni abonnement). Si le PC est éteint, le livre attend sur ton téléphone et part dès que le PC répond.
 - Lecture : surlignage mot à mot, vitesse, notes et surlignages, reprise là où tu t'étais arrêté, mode hors ligne (PWA), 6 langues d'interface.
 
 ## Installer
 
-Il faut **Node.js 20+** ([nodejs.org](https://nodejs.org)) et **Python 3.10+** ([python.org](https://www.python.org), coche « Add to PATH » sous Windows).
+**Windows** : ouvre PowerShell (touche Windows, tape « PowerShell ») et colle :
 
-1. Télécharge le projet (bouton **Code → Download ZIP**, ou `git clone https://github.com/GOLGOT55/Lisio`).
-2. Lance **`start.bat`** (Windows) ou **`./start.sh`** (macOS / Linux).
+```powershell
+irm https://raw.githubusercontent.com/GOLGOT55/Lisio/main/install.ps1 | iex
+```
 
-Le premier lancement installe le serveur et Whisper (quelques minutes, puis le modèle de Whisper se télécharge au premier livre). Ensuite, l'adresse de Lisio s'affiche : ouvre `http://localhost:8787`, crée ton compte, ajoute un livre.
+**macOS / Linux** : dans le Terminal (Node.js 20+ et Python 3.10+ requis) :
 
-Laisse la fenêtre ouverte : Lisio fonctionne tant qu'elle l'est.
+```bash
+curl -fsSL https://raw.githubusercontent.com/GOLGOT55/Lisio/main/install.sh | bash
+```
+
+La commande crée un dossier **`Lisio` dans tes Téléchargements**, avec tout dedans : le programme, Whisper, et tes données (comptes, livres) dans `Lisio/data`. Sous Windows, elle installe aussi Node.js et Python s'ils manquent, et fait **démarrer Lisio avec Windows** (fenêtre réduite) : dès que le PC s'allume, les livres en attente sont transcrits. Pour l'enlever du démarrage, supprime le raccourci « Lisio » du dossier Démarrage (`Win + R` → `shell:startup`). La même commande sert à mettre Lisio à jour : tes données sont gardées.
+
+Le premier lancement installe le serveur et Whisper (quelques minutes, puis le modèle de Whisper se télécharge au premier livre). Ensuite, ouvre `http://localhost:8787`, crée ton compte, ajoute un livre. La commande est aussi dans Lisio : **Paramètres → Installer Lisio sur un PC**.
+
+Sans la commande : télécharge le projet (**Code → Download ZIP**), puis lance `start.bat` (Windows) ou `./start.sh`.
+
+Lisio fonctionne tant que sa fenêtre est ouverte.
+
+### File d'attente
+
+Le navigateur (PC ou téléphone) lit le PDF, découpe le MP3 et envoie tout au PC. Le script `scripts/queue.mjs` (lancé par `start`) transcrit ensuite les livres un par un avec Whisper et les synchronise : tu peux fermer la page. La bibliothèque affiche « En attente du PC », l'avancement, puis le livre prêt. En cas d'échec, touche le livre pour réessayer.
 
 ### Whisper et la carte graphique
 

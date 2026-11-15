@@ -1,6 +1,6 @@
 // Hors ligne : coquille de l'appli en cache, livres téléchargés dans "book-<id>", lectures audio par plages (Range).
-const SHELL = "shell-v13";
-const SHELL_FILES = ["/", "/style.css", "/app.js", "/i18n.js", "/build.js", "/vendor/pdf.min.mjs", "/vendor/pdf.worker.min.mjs", "/manifest.webmanifest", "/icon.svg", "/books/index.json"];
+const SHELL = "shell-v14";
+const SHELL_FILES = ["/", "/style.css", "/app.js", "/i18n.js", "/build.js", "/align.js", "/vendor/pdf.min.mjs", "/vendor/pdf.worker.min.mjs", "/manifest.webmanifest", "/icon.svg", "/books/index.json"];
 
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(SHELL).then((c) => Promise.all(SHELL_FILES.map((f) => fetch(f, { cache: "reload" }).then((r) => c.put(f, r)))))); self.skipWaiting(); });
 // les anciennes versions sont effacées : sinon, hors ligne, caches.match trouvait d'abord le vieux style.css

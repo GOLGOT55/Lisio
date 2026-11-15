@@ -24,7 +24,9 @@ if not exist .venv\Scripts\python.exe (
 
 node node_modules\wrangler\bin\wrangler.js d1 execute lisio --local --persist-to data --file schema.sql >nul || (echo Impossible de préparer la base de données. & pause & exit /b 1)
 
+node scripts\queue.mjs init
 start "Lisio - Whisper" /min .venv\Scripts\python whisper\server.py
+start "Lisio - File d'attente" /min node scripts\queue.mjs
 node scripts\urls.mjs 8787
 node node_modules\wrangler\bin\wrangler.js dev --ip 0.0.0.0 --port 8787 --persist-to data
 pause
