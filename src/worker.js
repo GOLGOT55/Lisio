@@ -88,6 +88,13 @@ async function api(req, env, path) {
     return json({ ok: true }, 200, { "set-cookie": await newSession(env, id, b.remember !== false, req) });
   }
 
+  // Partage vers un autre PC Lisio : infos publiques d'un livre par son code (ses fichiers sont servis dans /books/<id>/)
+  const sm = path.match(/^\/api\/share\/([A-Z0-9]{12})$/);
+  if (sm && method === "GET") {
+    const bk = await env.DB.prepare("SELECT id, title, author, year, colors, duration FROM books WHERE share = ? AND r2 = 1 AND status = 'ready'").bind(sm[1]).first();
+    return bk ? json({ ...bk, colors: JSON.parse(bk.colors) }, 200, { "access-control-allow-origin": "*" }) : json({ error: "Code inconnu." }, 404, { "access-control-allow-origin": "*" });
+  }
+
   const user = await currentUser(req, env);
   if (!user) return bad("Non connecté.", 401);
 
@@ -187,8 +194,8 @@ async function api(req, env, path) {
   }
   // ---------- Ajout de livres : transcription par Whisper sur ce PC (whisper/server.py) ----------
   if (path === "/api/ai/quota" && method === "GET") {
-    const ok = await fetch(WHISPER + "/health").then((r) => r.ok).catch(() => false);
-    return json({ used: 0, limit: -1, left: -1, storage: true, ready: ok });
+    const ok = !!env.R2 && await fetch(WHISPER + "/health").then((r) => r.ok).catch(() => false);
+    return json({ used: 0, limit: -1, left: -1, storage: !!env.R2, ready: ok });
   }
   if (path === "/api/ai/transcribe" && method === "POST") {
     const n = +req.headers.get("content-length") || 0;
@@ -206,7 +213,7 @@ async function api(req, env, path) {
       .bind(id, user.id, Date.now(), title, s(b.author, 120), s(b.year, 10), JSON.stringify(colors)).run();
     return json({ id });
   }
-  if ((m = path.match(/^\/api\/books\/([a-z0-9-]{1,64})\/(?:files\/(book\.pdf|book\.json|audio\/\d{3}\.(?:mp3|m4a|aac|ogg|opus|wav|flac))|(publish))$/))) {
+  if ((m = path.match(/^\/api\/books\/([a-z0-9-]{1,64})\/(?:files\/(book\.pdf|book\.json|audio\/\d{3}\.mp3)|(publish))$/))) {
     const bk = await env.DB.prepare("SELECT owner_id, status FROM books WHERE id = ? AND r2 = 1").bind(m[1]).first();
     if (!bk || bk.owner_id !== user.id || bk.status !== "draft") return bad("Interdit.", 403);
     if (m[2] && method === "PUT") {
@@ -239,7 +246,7 @@ async function catalogJson(req, env) {
 async function r2File(req, env, key) {
   const obj = await env.R2.get(key, { range: req.headers });
   if (!obj) return null;
-  const h = new Headers({ "accept-ranges": "bytes", etag: obj.httpEtag });
+  const h = new Headers({ "accept-ranges": "bytes", etag: obj.httpEtag, "access-control-allow-origin": "*" }); // * : copie d'un livre partagé vers un autre PC Lisio
   obj.writeHttpMetadata(h);
   if (req.headers.has("range") && obj.range) {
     const { offset = 0, length = obj.size - offset } = obj.range;

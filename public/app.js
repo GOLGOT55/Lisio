@@ -16,7 +16,7 @@ const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? 
 let LANG = "fr";
 const t = (s) => DICT[LANG]?.[s] ?? s;
 const ORIG = new WeakMap(); // texte français d'origine de chaque nœud
-const SKIP = "#pdfFile, #quotaInfo, #confirm, #editCovers, #article, #pdfView, #shelf, #resume, #audioList, #searchRes, #notesList, #apStages, #apDone, .pin, script, style";
+const SKIP = "#pdfFile, #quotaInfo, #confirm, #editCovers, #article, #pdfView, #shelf, #resume, #audioList, #searchRes, #notesList, #codeMsg, #apStages, #apDone, .pin, script, style";
 function translateStatic() {
   document.documentElement.lang = LANG;
   const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.parentElement.closest(SKIP) || !n.nodeValue.trim() ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
@@ -234,8 +234,12 @@ async function shareBook(b) {
   let code;
   try { code = (await api(`/books/${b.id}/share`, "POST")).code; } catch (e) { return toast(e.message || t("Pas de connexion internet.")); }
   const nice = code.match(/.{4}/g).join("-");
-  if (await confirmBox(`${t("Code de partage")} : ${nice}`, t("Donne ce code : la personne l'entre dans « Ajouter un livre » → « J'ai un code », et le livre arrive dans sa bibliothèque."), t("Copier le code"), false))
-    navigator.clipboard?.writeText(nice).then(() => toast(t("Code copié")));
+  // un autre PC Lisio copie le livre depuis cette adresse : inutile si on est sur localhost
+  const local = /^(localhost|127\.|\[::1\])/.test(location.hostname), link = `${location.origin}/partage/${nice}`;
+  const sub = t("Donne ce code : la personne l'entre dans « Ajouter un livre » → « J'ai un code », et le livre arrive dans sa bibliothèque.") + " " +
+    (local ? t("Pour l'envoyer vers un autre PC Lisio, ouvre Lisio par ton adresse Wi-Fi ou de tunnel, puis partage à nouveau.") : `${t("Vers un autre PC Lisio, donne ce lien (le livre est copié en entier, transcription comprise) :")} ${link}`);
+  if (await confirmBox(`${t("Code de partage")} : ${nice}`, sub, t(local ? "Copier le code" : "Copier le lien"), false))
+    navigator.clipboard?.writeText(local ? nice : link).then(() => toast(t(local ? "Code copié" : "Lien copié")));
 }
 function editBook(b) {
   const d = $("#bookEdit"), E = d.querySelector("form").elements, base = b.orig || b;
@@ -1057,14 +1061,17 @@ $("#bgFile").addEventListener("change", async (e) => {
 // ---------- Ajouter un livre : le navigateur lit le PDF et découpe l'audio, Whisper (sur le PC serveur) transcrit, tout est rangé sur le PC ----------
 const COVERS = [["#7a2e22", "#3d1712"], ["#2f5d50", "#15302a"], ["#27466b", "#121f33"], ["#5b3a6e", "#2a1836"], ["#8a5a1f", "#4a2c0c"], ["#9b3d55", "#4b1726"], ["#41622f", "#1f3215"], ["#3c3c3c", "#151515"]];
 const add = { pdf: null, audio: [], colors: COVERS[0], quota: null };
-const isAudio = (f) => /\.(mp3|m4a|wav|ogg|opus|aac|flac)$/i.test(f.name);
+const isAudio = (f) => /\.mp3$/i.test(f.name); // MP3 seulement : découpé sans décodage, et léger
 const byName = (a, b) => a.name.localeCompare(b.name, "fr", { numeric: true, sensitivity: "base" });
 let job = null; // ajout en cours : il continue tant que la page reste ouverte
 
 async function showQuota() {
   const q = (add.quota = await api("/ai/quota").catch(() => null)), el = $("#quotaInfo");
   if (!q) { el.hidden = true; return; }
-  const open = q.storage && q.ready;
+  // serveur sans stockage de fichiers (ex. site en ligne sans R2) : seul l'ajout par code reste
+  for (const x of $$("#add .add-intro, #add .sources, #add .add-how")) x.hidden = !q.storage;
+  if (!q.storage) { el.hidden = $("#addForm").hidden = true; return; }
+  const open = q.ready;
   el.hidden = false; el.className = "quota-info " + (open && q.left !== 0 ? "ok" : "off");
   el.querySelector("span").textContent = open ? t("Whisper est prêt sur le PC serveur") : t("Whisper ne répond pas : lance « start » sur le PC qui héberge Lisio.");
 }
@@ -1092,6 +1099,7 @@ function takeFiles(files) {
   const pdf = files.find((f) => /\.pdf$/i.test(f.name));
   if (pdf) add.pdf = pdf;
   const aud = files.filter(isAudio).sort(byName);
+  $("#addErr").textContent = files.some((f) => !isAudio(f) && /\.(m4a|mp4|wav|ogg|opus|aac|flac|webm|wma)$/i.test(f.name)) ? t("Seuls les fichiers MP3 sont acceptés.") : "";
   if (aud.length) add.audio = [...add.audio.filter((a) => !aud.some((b) => b.name === a.name)), ...aud].sort(byName);
   aud.forEach((f) => { // durée lue par le navigateur, pour l'estimation
     const a = new Audio(); a.preload = "metadata"; a.src = URL.createObjectURL(f);
@@ -1112,10 +1120,41 @@ function renderAdd() {
 }
 $("#codeForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const inp = e.target.elements.code, err = $("#codeErr"); err.textContent = "";
-  try { await api("/share", "POST", { code: inp.value }); inp.value = ""; toast(t("Livre ajouté à ta bibliothèque ✓")); ACTIONS.toLibrary(); }
-  catch (ex) { err.textContent = ex.status === 404 ? t("Code inconnu.") : ex.message || t("Pas de connexion internet."); }
+  const inp = e.target.elements.code, err = $("#codeErr"), msg = $("#codeMsg"), btn = e.target.querySelector("button"); err.textContent = "";
+  const m = inp.value.trim().match(/^(https?:\/\/[^/\s]+)\/partage\/([A-Za-z0-9-]+)\/?$/);
+  btn.disabled = true;
+  try {
+    if (m && m[1] !== location.origin) await importRemote(m[1], m[2], (p) => (msg.textContent = `${t("Copie du livre depuis l'autre PC…")} ${p} %`));
+    else await api("/share", "POST", { code: m ? m[2] : inp.value });
+    inp.value = ""; toast(t("Livre ajouté à ta bibliothèque ✓")); ACTIONS.toLibrary();
+  } catch (ex) { err.textContent = ex.status === 404 ? t("Code inconnu.") : ex.message || t("Pas de connexion internet."); }
+  finally { msg.textContent = ""; btn.disabled = false; }
 });
+// Copie complète d'un livre partagé par un autre PC Lisio (PDF, audio, synchronisation) dans ce Lisio
+async function importRemote(origin, code, prog) {
+  code = code.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const get = async (u, asJson) => {
+    const r = await fetch(u).catch(() => null);
+    if (!r?.ok) throw new Error(r?.status === 404 ? t("Code inconnu.") : t("L'autre PC Lisio ne répond pas : il doit être allumé avec Lisio lancé."));
+    return asJson ? r.json() : r.blob();
+  };
+  const info = await get(`${origin}/api/share/${code}`, true), base = `${origin}/books/${encodeURIComponent(info.id)}/`;
+  const bookJson = await get(base + "book.json");
+  const files = ["book.pdf", ...JSON.parse(await bookJson.text()).parts.map((p) => p.src)];
+  prog(0);
+  const { id } = await api("/books", "POST", { title: info.title, author: info.author, year: info.year, colors: info.colors });
+  for (const [k, f] of files.entries()) { await putFile(id, f, await get(base + f)); prog(Math.round(((k + 1) / (files.length + 1)) * 100)); }
+  await putFile(id, "book.json", bookJson);
+  await api(`/books/${id}/publish`, "POST", { duration: info.duration });
+}
+async function putFile(id, name, blob) {
+  for (let k = 0; ; k++) {
+    const r = await fetch(`/api/books/${id}/files/${name}`, { method: "PUT", body: blob }).catch(() => null);
+    if (r?.ok) return;
+    if (k >= 3 || (r && r.status < 500)) throw new Error((await r?.json().catch(() => null))?.error || t("Envoi des fichiers impossible."));
+    await new Promise((res) => setTimeout(res, 3000 * (k + 1)));
+  }
+}
 $("#pdfFile").addEventListener("click", (e) => { if (e.target.closest("[data-rmpdf]")) { add.pdf = null; renderAdd(); } });
 $("#audioList").addEventListener("click", (e) => {
   const mv = e.target.closest("[data-mv]"), rm = e.target.closest("[data-rm]");
@@ -1163,14 +1202,7 @@ async function runJob(j) {
   // 2. création du livre, puis envoi des fichiers et transcription en même temps
   const { id } = await api("/books", "POST", { title: j.title, author: j.author, year: j.year, colors: j.colors });
   j.id = id;
-  const put = async (name, blob) => {
-    for (let k = 0; ; k++) {
-      const r = await fetch(`/api/books/${id}/files/${name}`, { method: "PUT", body: blob }).catch(() => null);
-      if (r?.ok) return;
-      if (k >= 3 || (r && r.status < 500)) throw new Error((await r?.json().catch(() => null))?.error || t("Envoi des fichiers impossible."));
-      await new Promise((res) => setTimeout(res, 3000 * (k + 1)));
-    }
-  };
+  const put = (name, blob) => putFile(id, name, blob);
   const total = add.pdf.size + chunks.reduce((s, c) => s + c.blob.size, 0); let sent = 0;
   const uploads = (async () => {
     await put("book.pdf", add.pdf); sent += add.pdf.size; set("upload", (sent / total) * 100);

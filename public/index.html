@@ -73,8 +73,9 @@
       <p class="muted add-intro">Dépose le PDF et les fichiers audio dans l'ordre. Lisio écoute l'audio, le cale mot à mot sur le PDF, puis le met dans ta bibliothèque.</p>
 
       <form id="codeForm" class="code-form">
-        <label for="shareCode">J'ai un code de partage</label>
-        <div class="code-row"><input id="shareCode" name="code" placeholder="ABCD-EFGH-JKLM" maxlength="20" autocomplete="off" required><button class="btn accent">Ajouter</button></div>
+        <label for="shareCode">J'ai un code ou un lien de partage</label>
+        <div class="code-row"><input id="shareCode" name="code" placeholder="ABCD-EFGH-JKLM" maxlength="300" autocomplete="off" required><button class="btn accent">Ajouter</button></div>
+        <p class="muted" id="codeMsg" aria-live="polite"></p>
         <p class="err" id="codeErr" role="alert"></p>
       </form>
 
@@ -99,7 +100,7 @@
       </div>
 
       <p id="quotaInfo" class="quota-info" hidden><i></i><span></span></p>
-      <p class="muted add-how">Le texte est lu dans le PDF, l'audio est transcrit par Whisper sur le PC qui héberge Lisio, puis les deux sont synchronisés mot à mot. Garde la page ouverte pendant le traitement. Fichiers audio : MP3 de préférence.</p>
+      <p class="muted add-how">Ça marche sur ordinateur comme sur téléphone : le texte est lu dans le PDF, l'audio est transcrit par Whisper sur le PC qui héberge Lisio, puis les deux sont synchronisés mot à mot. Garde la page ouverte pendant le traitement. Fichiers audio : MP3 uniquement.</p>
 
       <form id="addForm" class="add-form">
         <div class="fields">
@@ -119,9 +120,9 @@
             <span class="muted">Glisse le fichier ici ou clique</span>
           </label>
           <label class="drop" id="dropAudio" tabindex="0">
-            <input type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.opus,.flac" multiple hidden>
+            <input type="file" accept="audio/mpeg,.mp3" multiple hidden>
             <span class="drop-ico">♪</span>
-            <strong>Les fichiers audio</strong>
+            <strong>Les fichiers audio (MP3)</strong>
             <span class="muted">Glisse les fichiers ou le dossier entier, ou clique</span>
             <button type="button" class="link small" id="pickFolder">Choisir un dossier</button>
           </label>

@@ -4,7 +4,7 @@ Lis un livre PDF pendant que son livre audio le raconte : chaque mot s'allume au
 Lisio est gratuit, open source, et **tourne sur ton propre PC**. Tes comptes, tes livres et tes notes restent chez toi.
 
 - Bibliothèque personnelle : chaque compte a ses livres, retrouvés sur tous ses appareils (PC, téléphone, tablette).
-- Ajout d'un livre depuis le site : dépose le PDF et les fichiers audio, Lisio les synchronise mot à mot avec **Whisper** (installé automatiquement, il tourne sur ton PC, sans clé d'API ni abonnement).
+- Ajout d'un livre depuis le site, sur ordinateur comme sur téléphone : dépose le PDF et les fichiers audio **MP3**, Lisio les synchronise mot à mot avec **Whisper** (installé automatiquement, il tourne sur ton PC, sans clé d'API ni abonnement).
 - Lecture : surlignage mot à mot, vitesse, notes et surlignages, reprise là où tu t'étais arrêté, mode hors ligne (PWA), 6 langues d'interface.
 
 ## Installer
@@ -46,6 +46,11 @@ SIGNUP=off
 ```
 
 puis relance Lisio.
+
+## Partager un livre
+
+- **Sur le même Lisio** : menu « … » d'un livre → Partager. Donne le code ; l'autre compte l'entre dans « Ajouter un livre ».
+- **Vers le Lisio d'un autre PC** : ouvre Lisio par ton adresse Wi-Fi ou ton tunnel (pas `localhost`), puis Partager : un lien `https://…/partage/ABCD-EFGH-JKLM` s'affiche. L'autre personne le colle dans « Ajouter un livre » sur son Lisio : le livre entier (PDF, audio, synchronisation) est copié chez elle, sans refaire la transcription. Ton PC doit rester allumé avec Lisio lancé pendant la copie.
 
 ## Tes données
 
