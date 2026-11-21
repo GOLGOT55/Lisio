@@ -203,6 +203,7 @@
           <button class="icon-btn" data-act="back10" aria-label="Reculer de 10 secondes"></button>
           <button class="play" data-act="play" aria-label="Lecture"></button>
           <button class="icon-btn" data-act="fwd10" aria-label="Avancer de 10 secondes"></button>
+          <button class="icon-btn" data-act="schedule" aria-label="Programmer la lecture" title="Programmer la lecture"></button>
         </div>
         <div class="pl-side">
           <select id="speed" aria-label="Vitesse">
@@ -319,6 +320,16 @@
       <label>Couverture</label>
       <div id="editCovers" class="cover-colors"></div>
       <div class="row"><button type="button" class="btn" data-close>Annuler</button><button value="ok" class="btn accent">Enregistrer</button></div>
+    </form>
+  </dialog>
+  <dialog id="schedule" class="mini">
+    <form method="dialog">
+      <h2>Programmer la lecture</h2>
+      <p id="schedNow" hidden>Lecture dans <b id="schedLeft"></b></p>
+      <label class="sched-opt"><input type="radio" name="mode" value="in" checked> Dans <input name="mins" type="number" min="1" max="1440" value="15" inputmode="numeric" aria-label="Minutes"> min</label>
+      <label class="sched-opt"><input type="radio" name="mode" value="at"> À <input name="at" type="time" aria-label="Heure"></label>
+      <p class="muted">Garde Lisio ouvert (sur téléphone, écran allumé) : la lecture démarre toute seule.</p>
+      <div class="row"><button type="button" class="btn" id="schedCancel" hidden>Annuler la programmation</button><button type="button" class="btn" data-close>Fermer</button><button value="ok" class="btn accent">Programmer</button></div>
     </form>
   </dialog>
   <div id="ctxMenu" class="ctx" hidden></div>

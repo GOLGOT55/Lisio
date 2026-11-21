@@ -40,7 +40,7 @@ const ICONS = {
   modePdf: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>', modeRead: '<path d="M4 6h16M4 10h16M4 14h16M4 18h10"/>',
   download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>', done: '<path d="M5 12l5 5 9-10"/>',
   fullscreen: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>', close: '<path d="M6 6l12 12M18 6L6 18"/>',
-  play: '<path d="M8 5v14l11-7z" fill="currentColor"/>', pause: '<path d="M7 5h3v14H7zM14 5h3v14h-3z" fill="currentColor"/>',
+  schedule: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/>', play: '<path d="M8 5v14l11-7z" fill="currentColor"/>', pause: '<path d="M7 5h3v14H7zM14 5h3v14h-3z" fill="currentColor"/>',
   back10: '<path d="M4 12a8 8 0 1 0 3-6.2"/><path d="M4 4v5h5"/><text x="12" y="15.5" font-size="7" text-anchor="middle" fill="currentColor" stroke="none" font-family="sans-serif">10</text>',
   trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>', goto: '<path d="M7 17L17 7M9 7h8v8"/>', more: '<circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/>',
   fwd10: '<path d="M20 12a8 8 0 1 1-3-6.2"/><path d="M20 4v5h-5"/><text x="12" y="15.5" font-size="7" text-anchor="middle" fill="currentColor" stroke="none" font-family="sans-serif">10</text>',
@@ -571,6 +571,25 @@ function seekToWord(i) { follow(true); seekTo(S.book.t[i] + 0.01); }
 audio.addEventListener("ended", () => { if (seg + 1 < S.book.parts.length) seekTo(S.book.parts[seg + 1].offset, true); });
 audio.addEventListener("play", () => { S.playing = true; paintIcons(); loop(); follow(true); scrollToWord(S.cur, true); }); // Lecture = on suit de nouveau le texte
 audio.addEventListener("pause", () => { S.playing = false; paintIcons(); saveProgress(); });
+// lecture programmée : démarre dans X min ou à une heure donnée (tant que la page est ouverte)
+let sched = null;
+function setSched(end) {
+  clearTimeout(sched?.t);
+  sched = end ? { end, id: S.book.id, t: setTimeout(() => { const { id } = sched; setSched(null); if (S.book?.id === id && audio.paused) togglePlay(); }, end - Date.now()) } : null;
+  $('[data-act="schedule"]').classList.toggle("on", !!sched);
+}
+$("#schedule").addEventListener("close", () => {
+  const d = $("#schedule"), f = d.querySelector("form").elements;
+  if (d.returnValue !== "ok") return;
+  let end = Date.now() + Math.min(1440, Math.max(1, +f.mins.value || 15)) * 60000;
+  if (f.mode.value === "at" && f.at.value) {
+    const [h, m] = f.at.value.split(":"), x = new Date(); x.setHours(+h, +m, 0, 0);
+    end = x <= Date.now() ? x.getTime() + 86400000 : x.getTime(); // heure passée : demain
+  }
+  setSched(end); toast(`${t("Lecture dans")} ${clock((end - Date.now()) / 1000)}`);
+});
+$("#schedule").addEventListener("focusin", (e) => { const n = e.target.name; if (n === "mins" || n === "at") e.target.form.elements.mode.value = n === "at" ? "at" : "in"; });
+$("#schedCancel").addEventListener("click", () => { setSched(null); $("#schedule").close(); toast(t("Programmation annulée")); });
 function togglePlay() { if (audio.paused) audio.play().catch(() => toast(t("Lecture impossible : fichier audio introuvable."))); else audio.pause(); }
 
 function loop() { if (!S.playing) return; tick(); requestAnimationFrame(loop); }
@@ -1306,11 +1325,18 @@ function renderJob(j) {
 // ---------- Actions ----------
 const ACTIONS = {
   toggleHidden: () => { S.showHidden = !S.showHidden; renderLibrary(); },
-  back: () => { audio.pause(); saveProgress(); closePanel(); S.book = null; seg = -1; audio.removeAttribute("src"); showLibrary(); },
+  back: () => { if (sched) setSched(null); audio.pause(); saveProgress(); closePanel(); S.book = null; seg = -1; audio.removeAttribute("src"); showLibrary(); },
   settings: openSettings, search: () => ($("#panel").classList.contains("open") && !$('[data-pane="search"]').hidden ? closePanel() : openPanel("search")),
   notes: () => ($("#panel").classList.contains("open") && !$('[data-pane="notes"]').hidden ? closePanel() : openPanel("notes")),
   closePanel, mode: () => setMode(S.prefs.mode === "pdf" ? "read" : "pdf"), download: downloadBook,
   fullscreen: () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.()),
+  schedule: () => {
+    const d = $("#schedule"), f = d.querySelector("form").elements;
+    $("#schedNow").hidden = $("#schedCancel").hidden = !sched;
+    if (sched) { $("#schedLeft").dataset.end = sched.end; $("#schedLeft").textContent = clock((sched.end - Date.now()) / 1000); }
+    if (!f.at.value) f.at.value = new Date(Date.now() + 30 * 60000).toTimeString().slice(0, 5);
+    d.returnValue = ""; d.showModal();
+  },
   play: togglePlay, back10: () => seekTo(now() - 10), fwd10: () => seekTo(now() + 10),
   addNoteHere: () => addNote("note", S.cur, S.cur), exportMd, exportWord,
   addBook: showAdd, toLibrary: () => showLibrary(), share: () => shareBook({ id: S.book.id }),

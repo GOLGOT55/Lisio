@@ -204,6 +204,9 @@ dialog.mini h2 { font: 600 20px var(--title); margin: 0 0 14px; }
 dialog.mini p { margin: 0 0 6px; }
 dialog.mini .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 dialog.mini label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+dialog.mini .sched-opt { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--ink); }
+dialog.mini .sched-opt input { display: inline-block; width: auto; margin: 0; }
+dialog.mini .sched-opt input[type=number] { width: 84px; }
 dialog.mini input { display: block; width: 100%; margin-top: 5px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-size: 16px; }
 .btn.danger { background: #c94a3f; color: #fff; border-color: transparent; }
 .btn.danger:hover { background: #b23b31; }

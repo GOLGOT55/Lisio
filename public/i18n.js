@@ -267,6 +267,15 @@ const K = [
   ["Elle change à chaque démarrage de Lisio. Pour une adresse fixe, déploie Lisio sur Cloudflare et relie ton PC (voir le README).", "It changes every time Lisio starts. For a fixed address, deploy Lisio on Cloudflare and link your PC (see the README).", "Cambia cada vez que Lisio arranca. Para una dirección fija, despliega Lisio en Cloudflare y vincula tu PC (ver el README).", "Cambia a ogni avvio di Lisio. Per un indirizzo fisso, pubblica Lisio su Cloudflare e collega il PC (vedi il README).", "Sie ändert sich bei jedem Start von Lisio. Für eine feste Adresse stelle Lisio auf Cloudflare bereit und verbinde deinen PC (siehe README).", "Muda a cada arranque do Lisio. Para um endereço fixo, publica o Lisio na Cloudflare e liga o teu PC (ver o README)."],
   ["reste", "left", "quedan", "mancano", "noch", "faltam"],
   ["Temps restant", "Time left", "Tiempo restante", "Tempo rimanente", "Restzeit", "Tempo restante"],
+  ["Programmer la lecture", "Schedule playback", "Programar la lectura", "Programma la lettura", "Wiedergabe planen", "Programar a leitura"],
+  ["Lecture dans", "Playing in", "Reproducción en", "Riproduzione tra", "Wiedergabe in", "Leitura em"],
+  ["Dans", "In", "En", "Tra", "In", "Daqui a"],
+  ["À", "At", "A las", "Alle", "Um", "Às"],
+  ["Garde Lisio ouvert (sur téléphone, écran allumé) : la lecture démarre toute seule.", "Keep Lisio open (on a phone, screen on): playback starts by itself.", "Mantén Lisio abierto (en el móvil, pantalla encendida): la lectura empieza sola.", "Tieni Lisio aperto (sul telefono, schermo acceso): la lettura parte da sola.", "Lass Lisio offen (am Handy mit eingeschaltetem Bildschirm): die Wiedergabe startet von selbst.", "Mantém o Lisio aberto (no telemóvel, ecrã ligado): a leitura começa sozinha."],
+  ["Annuler la programmation", "Cancel schedule", "Cancelar la programación", "Annulla la programmazione", "Planung abbrechen", "Cancelar a programação"],
+  ["Programmer", "Schedule", "Programar", "Programma", "Planen", "Programar"],
+  ["Programmation annulée", "Schedule cancelled", "Programación cancelada", "Programmazione annullata", "Planung abgebrochen", "Programação cancelada"],
+  ["Heure", "Time", "Hora", "Ora", "Uhrzeit", "Hora"],
 ];
 export const LANGS = ["fr", "en", "es", "it", "de", "pt"];
 export const DICT = Object.fromEntries(LANGS.slice(1).map((l, k) => [l, Object.fromEntries(K.map((r) => [r[0], r[k + 1]]))]));
