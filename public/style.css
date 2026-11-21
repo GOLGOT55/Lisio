@@ -204,9 +204,20 @@ dialog.mini h2 { font: 600 20px var(--title); margin: 0 0 14px; }
 dialog.mini p { margin: 0 0 6px; }
 dialog.mini .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 dialog.mini label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 12px; }
-dialog.mini .sched-opt { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--ink); }
-dialog.mini .sched-opt input { display: inline-block; width: auto; margin: 0; }
-dialog.mini .sched-opt input[type=number] { width: 84px; }
+dialog.sched .sched-opt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 15px; color: var(--ink); }
+dialog.sched .sched-opt label { display: flex; align-items: center; gap: 8px; min-width: 64px; margin: 0; font-size: 15px; color: var(--ink); }
+dialog.sched .sched-opt input[type=radio] { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+dialog.sched .sched-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--muted); }
+dialog.sched .sched-fields input { display: inline-block; margin: 0; padding: 8px 6px; text-align: center; width: 64px; }
+dialog.sched .sched-fields input[type=time] { width: auto; min-width: 140px; }
+dialog.sched #schedNow { font-size: 15px; margin-bottom: 4px; }
+dialog.sched > form > .muted { margin-top: 12px; font-size: 13px; }
+dialog.sched .row { flex-wrap: wrap; }
+@media (max-width: 480px) {
+  dialog.sched { width: calc(100% - 20px); padding: 18px 16px; }
+  dialog.sched .row .btn { flex: 1 1 auto; }
+  dialog.sched #schedCancel { flex-basis: 100%; order: 3; }
+}
 dialog.mini input { display: block; width: 100%; margin-top: 5px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-size: 16px; }
 .btn.danger { background: #c94a3f; color: #fff; border-color: transparent; }
 .btn.danger:hover { background: #b23b31; }

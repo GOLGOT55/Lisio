@@ -322,12 +322,22 @@
       <div class="row"><button type="button" class="btn" data-close>Annuler</button><button value="ok" class="btn accent">Enregistrer</button></div>
     </form>
   </dialog>
-  <dialog id="schedule" class="mini">
+  <dialog id="schedule" class="mini sched">
     <form method="dialog">
       <h2>Programmer la lecture</h2>
       <p id="schedNow" hidden>Lecture dans <b id="schedLeft"></b></p>
-      <label class="sched-opt"><input type="radio" name="mode" value="in" checked> Dans <input name="mins" type="number" min="1" max="1440" value="15" inputmode="numeric" aria-label="Minutes"> min</label>
-      <label class="sched-opt"><input type="radio" name="mode" value="at"> À <input name="at" type="time" aria-label="Heure"></label>
+      <div class="sched-opt">
+        <label><input type="radio" name="mode" value="in" checked> Dans</label>
+        <span class="sched-fields">
+          <input name="h" type="number" min="0" max="23" value="0" inputmode="numeric" aria-label="Heures"> h
+          <input name="mins" type="number" min="0" max="59" value="15" inputmode="numeric" aria-label="Minutes"> min
+          <input name="s" type="number" min="0" max="59" value="0" inputmode="numeric" aria-label="Secondes"> s
+        </span>
+      </div>
+      <div class="sched-opt">
+        <label><input type="radio" name="mode" value="at"> À</label>
+        <span class="sched-fields"><input name="at" type="time" step="1" aria-label="Heure"></span>
+      </div>
       <p class="muted">Garde Lisio ouvert (sur téléphone, écran allumé) : la lecture démarre toute seule.</p>
       <div class="row"><button type="button" class="btn" id="schedCancel" hidden>Annuler la programmation</button><button type="button" class="btn" data-close>Fermer</button><button value="ok" class="btn accent">Programmer</button></div>
     </form>

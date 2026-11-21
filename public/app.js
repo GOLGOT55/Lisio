@@ -581,14 +581,15 @@ function setSched(end) {
 $("#schedule").addEventListener("close", () => {
   const d = $("#schedule"), f = d.querySelector("form").elements;
   if (d.returnValue !== "ok") return;
-  let end = Date.now() + Math.min(1440, Math.max(1, +f.mins.value || 15)) * 60000;
+  const n = (x, max) => Math.min(max, Math.max(0, Math.floor(+x.value || 0)));
+  let end = Date.now() + Math.max(1, n(f.h, 23) * 3600 + n(f.mins, 59) * 60 + n(f.s, 59)) * 1000;
   if (f.mode.value === "at" && f.at.value) {
-    const [h, m] = f.at.value.split(":"), x = new Date(); x.setHours(+h, +m, 0, 0);
+    const [h, m, s = 0] = f.at.value.split(":"), x = new Date(); x.setHours(+h, +m, +s, 0);
     end = x <= Date.now() ? x.getTime() + 86400000 : x.getTime(); // heure passée : demain
   }
   setSched(end); toast(`${t("Lecture dans")} ${clock((end - Date.now()) / 1000)}`);
 });
-$("#schedule").addEventListener("focusin", (e) => { const n = e.target.name; if (n === "mins" || n === "at") e.target.form.elements.mode.value = n === "at" ? "at" : "in"; });
+$("#schedule").addEventListener("focusin", (e) => { const n = e.target.name; if (["h", "mins", "s", "at"].includes(n)) e.target.form.elements.mode.value = n === "at" ? "at" : "in"; });
 $("#schedCancel").addEventListener("click", () => { setSched(null); $("#schedule").close(); toast(t("Programmation annulée")); });
 function togglePlay() { if (audio.paused) audio.play().catch(() => toast(t("Lecture impossible : fichier audio introuvable."))); else audio.pause(); }
 
@@ -1334,7 +1335,7 @@ const ACTIONS = {
     const d = $("#schedule"), f = d.querySelector("form").elements;
     $("#schedNow").hidden = $("#schedCancel").hidden = !sched;
     if (sched) { $("#schedLeft").dataset.end = sched.end; $("#schedLeft").textContent = clock((sched.end - Date.now()) / 1000); }
-    if (!f.at.value) f.at.value = new Date(Date.now() + 30 * 60000).toTimeString().slice(0, 5);
+    if (!f.at.value) f.at.value = new Date(Date.now() + 30 * 60000).toTimeString().slice(0, 8);
     d.returnValue = ""; d.showModal();
   },
   play: togglePlay, back10: () => seekTo(now() - 10), fwd10: () => seekTo(now() + 10),

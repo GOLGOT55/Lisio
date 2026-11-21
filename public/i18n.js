@@ -276,6 +276,8 @@ const K = [
   ["Programmer", "Schedule", "Programar", "Programma", "Planen", "Programar"],
   ["Programmation annulée", "Schedule cancelled", "Programación cancelada", "Programmazione annullata", "Planung abgebrochen", "Programação cancelada"],
   ["Heure", "Time", "Hora", "Ora", "Uhrzeit", "Hora"],
+  ["Heures", "Hours", "Horas", "Ore", "Stunden", "Horas"],
+  ["Secondes", "Seconds", "Segundos", "Secondi", "Sekunden", "Segundos"],
 ];
 export const LANGS = ["fr", "en", "es", "it", "de", "pt"];
 export const DICT = Object.fromEntries(LANGS.slice(1).map((l, k) => [l, Object.fromEntries(K.map((r) => [r[0], r[k + 1]]))]));
