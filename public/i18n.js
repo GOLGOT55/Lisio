@@ -278,6 +278,7 @@ const K = [
   ["Heure", "Time", "Hora", "Ora", "Uhrzeit", "Hora"],
   ["Heures", "Hours", "Horas", "Ore", "Stunden", "Horas"],
   ["Secondes", "Seconds", "Segundos", "Secondi", "Sekunden", "Segundos"],
+  ["Impossible de garder l'écran allumé : désactive l'économie de batterie et ouvre Lisio en https.", "Can't keep the screen on: turn off battery saver and open Lisio over https.", "No se puede mantener la pantalla encendida: desactiva el ahorro de batería y abre Lisio por https.", "Impossibile tenere lo schermo acceso: disattiva il risparmio batteria e apri Lisio in https.", "Der Bildschirm kann nicht an bleiben: Schalte den Energiesparmodus aus und öffne Lisio über https.", "Não é possível manter o ecrã ligado: desativa a poupança de bateria e abre o Lisio por https."],
 ];
 export const LANGS = ["fr", "en", "es", "it", "de", "pt"];
 export const DICT = Object.fromEntries(LANGS.slice(1).map((l, k) => [l, Object.fromEntries(K.map((r) => [r[0], r[k + 1]]))]));

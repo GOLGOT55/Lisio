@@ -322,7 +322,7 @@ function pcStore(pc) {
 async function catalogJson(req, env) {
   const stat = await env.ASSETS.fetch(new Request(new URL("/books/index.json", req.url))).then((r) => r.json()).catch(() => []);
   const user = await currentUser(req, env);
-  const own = user ? (await env.DB.prepare("SELECT b.id, b.title, b.author, b.year, b.duration, b.colors, b.status, j.progress, j.error, MAX(0, (e.ends - ?2) / 1000) AS left FROM books b LEFT JOIN jobs j ON j.book_id = b.id LEFT JOIN job_eta e ON e.book_id = b.id WHERE b.r2 = 1 AND ((b.status = 'ready' AND (b.owner_id = ?1 OR b.id IN (SELECT book_id FROM library WHERE user_id = ?1 AND added = 1))) OR (b.status IN ('queued', 'failed') AND b.owner_id = ?1))").bind(user.id, Date.now()).all()).results : [];
+  const own = user ? (await env.DB.prepare("SELECT b.id, b.title, b.author, b.year, b.duration, b.colors, b.status, j.progress, j.error, MAX(0, (e.ends - ?2) / 1000) AS left FROM books b LEFT JOIN jobs j ON j.book_id = b.id LEFT JOIN job_eta e ON e.book_id = b.id WHERE (b.r2 = 1 OR b.title IS NOT NULL) AND ((b.status = 'ready' AND (b.owner_id = ?1 OR b.id IN (SELECT book_id FROM library WHERE user_id = ?1 AND added = 1))) OR (b.status IN ('queued', 'failed') AND b.owner_id = ?1))").bind(user.id, Date.now()).all()).results : [];
   return json([...stat, ...own.map((b) => ({ ...b, colors: JSON.parse(b.colors) }))], 200, { "cache-control": "no-cache" });
 }
 // Fichiers d'un livre ajouté en ligne (R2), avec les plages d'octets pour pouvoir sauter dans l'audio
@@ -356,11 +356,24 @@ export default {
       catch (e) { console.error(e); return bad("Erreur serveur.", 500); }
     }
     if (path === "/books/index.json") return catalogJson(req, env);
+    if (await privateBook(req, env, path)) return bad("Introuvable.", 404);
     if (path.startsWith("/books/") && env.R2) { const r = await r2File(req, env, decodeURIComponent(path.slice(7))); if (r) return r; }
     if (path.endsWith(".m4a")) return audioRange(req, env);
     return env.ASSETS.fetch(req);
   },
 };
+
+// Livre statique privé (ligne books avec titre et propriétaire, r2 = 0) : fichiers servis au propriétaire et à qui a reçu son code
+async function privateBook(req, env, path) {
+  let p;
+  try { p = decodeURIComponent(path).split(/[\\/]+/).filter(Boolean); } catch { return true; } // adresse mal encodée
+  if (p[0]?.toLowerCase() !== "books" || !p[1]) return false;
+  const bk = await env.DB.prepare("SELECT owner_id FROM books WHERE id = ? AND r2 = 0 AND owner_id != 0 AND title IS NOT NULL").bind(p[1]).first();
+  if (!bk) return false;
+  const user = await currentUser(req, env);
+  if (!user) return true;
+  return bk.owner_id !== user.id && !(await env.DB.prepare("SELECT 1 FROM library WHERE user_id = ? AND book_id = ? AND added = 1").bind(user.id, p[1]).first());
+}
 
 // Les fichiers statiques ne gèrent pas les plages d'octets : sans elles, impossible de sauter dans l'audio
 async function audioRange(req, env) {

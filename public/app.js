@@ -577,6 +577,7 @@ function setSched(end) {
   clearTimeout(sched?.t);
   sched = end ? { end, id: S.book.id, t: setTimeout(() => { const { id } = sched; setSched(null); if (S.book?.id === id && audio.paused) togglePlay(); }, end - Date.now()) } : null;
   $('[data-act="schedule"]').classList.toggle("on", !!sched);
+  keepAwake();
 }
 $("#schedule").addEventListener("close", () => {
   const d = $("#schedule"), f = d.querySelector("form").elements;
@@ -667,6 +668,22 @@ if ("mediaSession" in navigator) {
   ms.setActionHandler("seekbackward", () => seekTo(now() - 10)); ms.setActionHandler("seekforward", () => seekTo(now() + 10));
   audio.addEventListener("play", () => { ms.metadata = new MediaMetadata({ title: S.book.title, artist: S.book.author, album: S.book.chapters[S.book.chapOf[S.cur]]?.title || "", artwork: [{ src: "/icon-512.png", sizes: "512x512", type: "image/png" }] }); });
 }
+
+// écran allumé pendant la lecture (et l'attente d'une lecture programmée), sinon le téléphone se met en veille et coupe l'audio
+let screenLock = null, lockBusy = false, lockWarned = false;
+async function keepAwake() {
+  const want = !!S.book && (!audio.paused || !!sched || (audio.ended && seg + 1 < S.book.parts?.length));
+  if (!want) { screenLock?.release().catch(() => {}); screenLock = null; return; }
+  if (document.hidden || lockBusy || (screenLock && !screenLock.released)) return;
+  lockBusy = true;
+  try { screenLock = await navigator.wakeLock.request("screen"); }
+  catch { if (!lockWarned && !document.hidden) { lockWarned = true; toast(t("Impossible de garder l'écran allumé : désactive l'économie de batterie et ouvre Lisio en https.")); } }
+  lockBusy = false;
+  if (!S.book || (audio.paused && !sched && !audio.ended)) keepAwake(); // mis en pause pendant la demande
+}
+for (const ev of ["play", "pause", "ended"]) audio.addEventListener(ev, keepAwake);
+addEventListener("visibilitychange", keepAwake); // le système rend le verrou quand Lisio passe en arrière-plan
+setInterval(keepAwake, 15000); // ou sans prévenir (batterie)
 
 // ---------- Notes et surlignages ----------
 // Palette : tons profonds utilisés en accent (barre, pastille, surlignage translucide) → lisibles en thème clair comme sombre
