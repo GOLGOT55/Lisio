@@ -281,18 +281,19 @@ let pdfDoc = null;
 async function openBook(id) {
   const meta = S.catalog.find((b) => b.id === id);
   if (!meta) return;
-  history.pushState(null, "", "/livre/" + id);
+  if (location.pathname !== "/livre/" + id) history.pushState(null, "", "/livre/" + id);
   show("reader");
   $("#rBook").textContent = meta.title;
   loading(t("Chargement du livre…"));
   const base = `/books/${id}/`;
+  let tag;
   const [book, notes, pdf] = await Promise.all([
-    fetch(base + "book.json").then((r) => r.json()),
+    fetch(base + "book.json").then((r) => { tag = tagOf(r); return r.json(); }),
     api("/notes/" + id).then((n) => { store.set("notes:" + id, n); return n; }).catch(() => store.get("notes:" + id, [])),
     pdfjs.getDocument(base + "book.pdf").promise,
   ]);
   pdfDoc = pdf;
-  S.book = prepare(book, id, base);
+  S.book = prepare(book, id, base); S.book.tag = tag;
   Object.assign(S.book, { title: meta.title, author: meta.author });
   S.notes = notes.map((n) => (n.kind === "note" && n.w0 === n.w1 ? { ...n, w0: sentenceOf(n.w0)[0], w1: sentenceOf(n.w0)[1] } : n));
   sortNotes(); S.sel = null;
@@ -307,10 +308,13 @@ async function openBook(id) {
   $("#speed").value = String(S.prefs.speed);
   $("#seek").max = S.book.duration;
   const p = S.progress[id];
-  await seekTo(p ? p.time : S.book.t[0], false);
+  seg = -1; // même numéro de partie ne veut pas dire même fichier audio
+  // audio refait : le mot lu fait foi, plus la seconde
+  await seekTo(!p ? S.book.t[0] : Math.abs(wordAt(p.time) - p.word) > 1 && p.word < S.book.N ? S.book.t[p.word] + 0.01 : p.time, false);
   updateDownloadBtn();
   loading(false);
   scrollToWord(S.cur, false);
+  updateBook();
 }
 function loading(msg) { $("#loading").hidden = !msg; if (msg) $("#loadingTxt").textContent = msg; }
 
@@ -1060,6 +1064,38 @@ async function downloadBook() {
     off[b.id] = Date.now(); store.set("offline", off); toast(t("Livre disponible hors ligne ✓")); updateDownloadBtn();
   } catch { toast(t("Téléchargement interrompu (connexion ou espace insuffisant).")); }
 }
+
+// Livre modifié sur le site : la copie hors ligne et le livre resté ouvert suivent
+const tagOf = (r) => r.headers.get("etag")?.replace(/^W\//, "");
+let updating = false;
+async function updateBook() {
+  const b = S.book;
+  if (!b || updating || !navigator.onLine) return;
+  updating = true;
+  try {
+    const url = b.base + "book.json", head = await fetch(url, { method: "HEAD", cache: "no-cache" }), live = head.ok && tagOf(head);
+    if (!live) return;
+    const name = "book-" + b.id, copy = globalThis.caches && (await caches.has(name)) ? await caches.open(name) : null;
+    const saved = await copy?.match(url), stale = saved && tagOf(saved) !== live;
+    if (!stale && b.tag === live) return;
+    const res = await fetch(url, { cache: "no-cache" });
+    if (!res.ok || tagOf(res) !== live) return; // ancien service worker : on réessaie quand le nouveau prend la main
+    if (stale) {
+      const pdf = await fetch(b.base + "book.pdf", { cache: "no-cache" });
+      if (!pdf.ok) return;
+      const pdfCopy = new Response(await pdf.blob(), { headers: pdf.headers }), audio = (await res.clone().json()).parts.map((p) => b.base + p.src);
+      for (const u of audio) if (!(await copy.match(u))) await copy.add(u);
+      await copy.put(b.base + "book.pdf", pdfCopy);
+      await copy.put(url, res); // en dernier : une mise à jour coupée recommence
+      for (const k of await copy.keys()) { const path = new URL(k.url).pathname; if (path.includes("/audio/") && !audio.includes(path)) await copy.delete(k); }
+    }
+    if (b.tag !== live && S.book === b && !S.playing && !$("#reader").hidden) await openBook(b.id);
+  } catch (e) {
+    console.warn("Mise à jour du livre :", e);
+  } finally { updating = false; }
+}
+addEventListener("visibilitychange", () => document.hidden || updateBook());
+navigator.serviceWorker?.addEventListener("controllerchange", updateBook);
 
 // ---------- Paramètres ----------
 const BG_PRESETS = ["", "#efe6d2", "#dfe7df", "#e3e0ee", "#2a2622", "#1d2a2a", "linear-gradient(160deg,#f3d9b1,#d9a77c)", "linear-gradient(160deg,#25313a,#0f1418)"];

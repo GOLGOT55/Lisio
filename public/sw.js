@@ -1,5 +1,5 @@
 // Hors ligne : coquille de l'appli en cache, livres téléchargés dans "book-<id>", lectures audio par plages (Range).
-const SHELL = "shell-v20";
+const SHELL = "shell-v21";
 const SHELL_FILES = ["/", "/style.css", "/app.js", "/i18n.js", "/build.js", "/align.js", "/vendor/pdf.min.mjs", "/vendor/pdf.worker.min.mjs", "/manifest.webmanifest", "/icon.svg", "/books/index.json"];
 
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(SHELL).then((c) => Promise.all(SHELL_FILES.map((f) => fetch(f, { cache: "reload" }).then((r) => c.put(f, r)))))); self.skipWaiting(); });
@@ -22,8 +22,13 @@ self.addEventListener("fetch", (e) => {
   if (url.origin === location.origin && url.pathname.startsWith("/books/") && url.pathname !== "/books/index.json") {
     e.respondWith((async () => {
       const hit = await caches.match(url.pathname);
-      if (hit) return req.headers.get("range") ? rangeFrom(hit, req.headers.get("range")) : hit;
-      return fetch(req);
+      if (!hit) return fetch(req);
+      // texte et PDF : réseau d'abord, sinon un livre téléchargé resterait figé ; copie si hors ligne, lent ou refusé
+      if (self.navigator.onLine && /\/book\.(json|pdf)$/.test(url.pathname)) {
+        const live = await Promise.race([fetch(req, { cache: "no-cache" }).catch(() => null), new Promise((ok) => setTimeout(ok, 4000))]);
+        if (live?.ok) return live;
+      }
+      return req.headers.get("range") ? rangeFrom(hit, req.headers.get("range")) : hit;
     })());
     return;
   }
